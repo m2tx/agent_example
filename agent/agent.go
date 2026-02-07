@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	"context"
@@ -9,30 +9,40 @@ import (
 )
 
 type Part struct {
-	Text string
+	Text             string `json:"text,omitempty"`
+	FunctionCall     string `json:"function_call,omitempty"`
+	FunctionResponse string `json:"function_response,omitempty"`
 }
 
 type Content struct {
-	Parts []Part
+	Parts []Part `json:"parts"`
 }
 
 type Agent struct {
 	client            *genai.Client
 	model             string
 	systemInstruction string
-	functionsMap      map[string]FunctionCallFn
+	functionsMap      map[string]*FunctionDeclaration
 	tools             []*genai.Tool
 	Session           map[string][]*genai.Content
 }
 
+type FunctionDeclaration struct {
+	Name             string
+	Description      string
+	ParametersSchema any
+	ResponseSchema   any
+	FunctionCall     FunctionCallFn
+}
+
 type FunctionCallFn func(ctx context.Context, args map[string]any) (map[string]any, error)
 
-func NewAgent(client *genai.Client, model string, systemInstruction string) *Agent {
+func New(client *genai.Client, model string, systemInstruction string) *Agent {
 	return &Agent{
 		client:            client,
 		model:             model,
 		systemInstruction: systemInstruction,
-		functionsMap:      make(map[string]FunctionCallFn),
+		functionsMap:      make(map[string]*FunctionDeclaration),
 		tools: []*genai.Tool{
 			{
 				FunctionDeclarations: []*genai.FunctionDeclaration{},
@@ -42,10 +52,27 @@ func NewAgent(client *genai.Client, model string, systemInstruction string) *Age
 	}
 }
 
-func (a *Agent) AddFunction(functionDeclaration *genai.FunctionDeclaration, toolFunc FunctionCallFn) error {
-	a.functionsMap[functionDeclaration.Name] = toolFunc
+func (a *Agent) AddFunctionCall(functionDeclaration *FunctionDeclaration) error {
+	if functionDeclaration == nil {
+		return fmt.Errorf("function declaration cannot be nil")
+	}
 
-	a.tools[0].FunctionDeclarations = append(a.tools[0].FunctionDeclarations, functionDeclaration)
+	if functionDeclaration.Name == "" {
+		return fmt.Errorf("function name cannot be empty")
+	}
+
+	if functionDeclaration.FunctionCall == nil {
+		return fmt.Errorf("function call implementation cannot be nil")
+	}
+
+	a.functionsMap[functionDeclaration.Name] = functionDeclaration
+
+	a.tools[0].FunctionDeclarations = append(a.tools[0].FunctionDeclarations, &genai.FunctionDeclaration{
+		Name:                 functionDeclaration.Name,
+		Description:          functionDeclaration.Description,
+		ParametersJsonSchema: functionDeclaration.ParametersSchema,
+		ResponseJsonSchema:   functionDeclaration.ResponseSchema,
+	})
 
 	return nil
 }
@@ -86,6 +113,16 @@ func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) (*Con
 func (a *Agent) parseParts(parts []*genai.Part) ([]Part, error) {
 	parsedParts := []Part{}
 	for _, part := range parts {
+		if part.FunctionCall != nil {
+			parsedParts = append(parsedParts, Part{FunctionCall: fmt.Sprintf("%s %v", part.FunctionCall.Name, part.FunctionCall.Args)})
+			continue
+		}
+
+		if part.FunctionResponse != nil {
+			parsedParts = append(parsedParts, Part{FunctionResponse: fmt.Sprintf("%s %v", part.FunctionResponse.Name, part.FunctionResponse.Response)})
+			continue
+		}
+
 		parsedParts = append(parsedParts, Part{Text: part.Text})
 	}
 
@@ -93,11 +130,32 @@ func (a *Agent) parseParts(parts []*genai.Part) ([]Part, error) {
 }
 
 func (a *Agent) HandleFunctionCall(ctx context.Context, functionName string, args map[string]any) (map[string]any, error) {
-	if fn, exists := a.functionsMap[functionName]; exists {
-		return fn(ctx, args)
+	if fd, exists := a.functionsMap[functionName]; exists {
+		return fd.FunctionCall(ctx, args)
 	}
 
 	return nil, fmt.Errorf("function %s not found", functionName)
+}
+
+func (a *Agent) ClearSession(sessionID string) {
+	a.Session[sessionID] = []*genai.Content{}
+}
+
+func (a *Agent) GetSession(sessionID string) []Content {
+	contentList := a.Session[sessionID]
+	result := make([]Content, 0, len(contentList))
+
+	for _, content := range contentList {
+		parts, err := a.parseParts(content.Parts)
+		if err != nil {
+			log.Printf("Error parsing parts: %v", err)
+			continue
+		}
+
+		result = append(result, Content{Parts: parts})
+	}
+
+	return result
 }
 
 func (a *Agent) processResponse(ctx context.Context, sessionID string, resp *genai.GenerateContentResponse) ([]*genai.Part, error) {

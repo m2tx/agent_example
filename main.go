@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/m2tx/agent_example/agent"
 	"google.golang.org/genai"
 )
 
@@ -20,37 +20,44 @@ func main() {
 		log.Fatal(err)
 	}
 
-	agent := NewAgent(client, getModel(), "Você é um agente de suporte que usa ferramentas para responder.")
-	err = agent.AddFunction(&genai.FunctionDeclaration{
-		Name:        "get_weather",
-		Description: "Busca o clima atual de uma cidade",
-		Parameters: &genai.Schema{
-			Type: genai.TypeObject,
-			Properties: map[string]*genai.Schema{
-				"location": {
-					Type:        genai.TypeString,
-					Description: "A cidade, ex: São Paulo, SP",
-				},
-			},
-			Required: []string{"location"},
-		},
-	}, func(ctx context.Context, args map[string]any) (map[string]any, error) {
-		location, ok := args["location"].(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid location argument")
-		}
-
-		return map[string]any{
-			"location":    location,
-			"temperature": "22°C",
-			"condition":   "Ensolarado",
-		}, nil
-	})
+	a := agent.New(client, getModel(), "Você é um agente especializado em administração de empresas que utiliza ferramentas para interagir com o sistema de gestão para gestão de colaboradores. Seja proativo e utilize as ferramentas disponíveis para ajudar o usuário a interagir com o sistema, fornencendo informações de colaboradores. Sempre que possível, utilize as ferramentas disponíveis para fornecer informações precisas e atualizadas ao usuário.")
+	err = a.AddFunctionCall(createWeatherFunctionDeclaration())
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	err = a.AddFunctionCall(createCompanyFunctionDeclaration())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = a.AddFunctionCall(createCollaboratorsFunctionDeclaration())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	http.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		sessionID := r.URL.Query().Get("session_id")
+		if sessionID == "" {
+			http.Error(w, "session_id is required", http.StatusBadRequest)
+			return
+		}
+
+		contents := a.GetSession(sessionID)
+		json.NewEncoder(w).Encode(contents)
+	})
+
 	http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		var req struct {
 			SessionID string `json:"session_id"`
 			Prompt    string `json:"prompt"`
@@ -60,7 +67,7 @@ func main() {
 			return
 		}
 
-		resp, err := agent.Send(ctx, req.SessionID, req.Prompt)
+		resp, err := a.Send(ctx, req.SessionID, req.Prompt)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
