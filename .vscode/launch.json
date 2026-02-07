@@ -1,0 +1,13 @@
+{
+    "configurations": [
+        {
+            "name": "Launch Go with .env",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "args": []
+        }
+    ]
+}
