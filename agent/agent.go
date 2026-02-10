@@ -137,7 +137,7 @@ func (a *Agent) parseParts(parts []*genai.Part) ([]Part, error) {
 	return parsedParts, nil
 }
 
-func (a *Agent) HandleFunctionCall(ctx context.Context, functionName string, args map[string]any) (map[string]any, error) {
+func (a *Agent) handleFunctionCall(ctx context.Context, functionName string, args map[string]any) (map[string]any, error) {
 	if fd, exists := a.functionsMap[functionName]; exists {
 		return fd.FunctionCall(ctx, args)
 	}
@@ -176,7 +176,7 @@ func (a *Agent) processResponse(ctx context.Context, sessionID string, resp *gen
 		for _, part := range candidate.Content.Parts {
 			if part.FunctionCall != nil {
 				log.Printf("FunctionCall: %s %v\n", part.FunctionCall.Name, part.FunctionCall.Args)
-				funcResp, err := a.HandleFunctionCall(ctx, part.FunctionCall.Name, part.FunctionCall.Args)
+				funcResp, err := a.handleFunctionCall(ctx, part.FunctionCall.Name, part.FunctionCall.Args)
 				if err != nil {
 					return nil, err
 				}
