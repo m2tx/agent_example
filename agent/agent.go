@@ -23,7 +23,6 @@ type Agent struct {
 	model             string
 	systemInstruction string
 	functionsMap      map[string]*FunctionDeclaration
-	tools             []*genai.Tool
 	Session           map[string][]*genai.Content
 }
 
@@ -43,12 +42,7 @@ func New(client *genai.Client, model string, systemInstruction string) *Agent {
 		model:             model,
 		systemInstruction: systemInstruction,
 		functionsMap:      make(map[string]*FunctionDeclaration),
-		tools: []*genai.Tool{
-			{
-				FunctionDeclarations: []*genai.FunctionDeclaration{},
-			},
-		},
-		Session: make(map[string][]*genai.Content),
+		Session:           make(map[string][]*genai.Content),
 	}
 }
 
@@ -67,17 +61,31 @@ func (a *Agent) AddFunctionCall(functionDeclaration *FunctionDeclaration) error 
 
 	a.functionsMap[functionDeclaration.Name] = functionDeclaration
 
-	a.tools[0].FunctionDeclarations = append(a.tools[0].FunctionDeclarations, &genai.FunctionDeclaration{
-		Name:                 functionDeclaration.Name,
-		Description:          functionDeclaration.Description,
-		ParametersJsonSchema: functionDeclaration.ParametersSchema,
-		ResponseJsonSchema:   functionDeclaration.ResponseSchema,
-	})
-
 	return nil
 }
 
-func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) (*Content, error) {
+func (a *Agent) getTools(functionNames []string) []*genai.Tool {
+	functions := []*genai.FunctionDeclaration{}
+
+	for _, name := range functionNames {
+		if fd, exists := a.functionsMap[name]; exists {
+			functions = append(functions, &genai.FunctionDeclaration{
+				Name:                 fd.Name,
+				Description:          fd.Description,
+				ParametersJsonSchema: fd.ParametersSchema,
+				ResponseJsonSchema:   fd.ResponseSchema,
+			})
+		}
+	}
+
+	return []*genai.Tool{
+		{
+			FunctionDeclarations: functions,
+		},
+	}
+}
+
+func (a *Agent) Send(ctx context.Context, sessionID string, tools []string, prompt string) (*Content, error) {
 	a.Session[sessionID] = append(a.Session[sessionID], &genai.Content{
 		Parts: []*genai.Part{
 			{
@@ -88,7 +96,7 @@ func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) (*Con
 	})
 
 	resp, err := a.client.Models.GenerateContent(ctx, a.model, a.Session[sessionID], &genai.GenerateContentConfig{
-		Tools: a.tools,
+		Tools: a.getTools(tools),
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{{Text: a.systemInstruction}},
 		},
