@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -10,6 +11,9 @@ import (
 	"github.com/m2tx/agent_example/agent"
 	"google.golang.org/genai"
 )
+
+//go:embed system_instruction.txt
+var systemInstruction string
 
 func main() {
 	ctx := context.Background()
@@ -20,7 +24,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	a := agent.New(client, getModel(), "Você é um agente especializado em administração de empresas que utiliza ferramentas para interagir com o sistema de gestão para gestão de colaboradores. Seja proativo e utilize as ferramentas disponíveis para ajudar o usuário a interagir com o sistema, fornencendo informações de colaboradores. Sempre que possível, utilize as ferramentas disponíveis para fornecer informações precisas e atualizadas ao usuário.")
+	a := agent.New(client, getModel(), systemInstruction)
 	err = a.AddFunctionCall(createWeatherFunctionDeclaration())
 	if err != nil {
 		log.Fatal(err)
@@ -67,7 +71,7 @@ func main() {
 			return
 		}
 
-		resp, err := a.Send(ctx, req.SessionID, []string{"get_weather", "get_companies", "get_collaborators"}, req.Prompt)
+		resp, err := a.Send(ctx, req.SessionID, []string{"get_companies", "get_collaborators"}, req.Prompt)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
