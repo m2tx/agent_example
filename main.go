@@ -74,6 +74,16 @@ func main() {
 			return
 		}
 
+		if req.SessionID == "" {
+			http.Error(w, "session_id is required", http.StatusBadRequest)
+			return
+		}
+
+		if req.Prompt == "" {
+			http.Error(w, "prompt is required", http.StatusBadRequest)
+			return
+		}
+
 		resp, err := a.Send(ctx, req.SessionID, []string{"get_companies", "get_collaborators"}, req.Prompt)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
