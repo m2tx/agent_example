@@ -84,7 +84,7 @@ func main() {
 			return
 		}
 
-		resp, err := a.Send(ctx, req.SessionID, []string{"get_companies", "get_collaborators"}, req.Prompt)
+		resp, err := a.Send(ctx, req.SessionID, req.Prompt)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
