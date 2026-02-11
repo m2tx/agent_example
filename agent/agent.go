@@ -64,18 +64,16 @@ func (a *Agent) AddFunctionCall(functionDeclaration *FunctionDeclaration) error 
 	return nil
 }
 
-func (a *Agent) getTools(functionNames []string) []*genai.Tool {
+func (a *Agent) getTools() []*genai.Tool {
 	functions := []*genai.FunctionDeclaration{}
 
-	for _, name := range functionNames {
-		if fd, exists := a.functionsMap[name]; exists {
-			functions = append(functions, &genai.FunctionDeclaration{
-				Name:                 fd.Name,
-				Description:          fd.Description,
-				ParametersJsonSchema: fd.ParametersSchema,
-				ResponseJsonSchema:   fd.ResponseSchema,
-			})
-		}
+	for _, fd := range a.functionsMap {
+		functions = append(functions, &genai.FunctionDeclaration{
+			Name:                 fd.Name,
+			Description:          fd.Description,
+			ParametersJsonSchema: fd.ParametersSchema,
+			ResponseJsonSchema:   fd.ResponseSchema,
+		})
 	}
 
 	return []*genai.Tool{
@@ -85,7 +83,7 @@ func (a *Agent) getTools(functionNames []string) []*genai.Tool {
 	}
 }
 
-func (a *Agent) Send(ctx context.Context, sessionID string, tools []string, prompt string) (*Content, error) {
+func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) (*Content, error) {
 	var chat *genai.Chat
 	var err error
 
@@ -95,7 +93,7 @@ func (a *Agent) Send(ctx context.Context, sessionID string, tools []string, prom
 			SystemInstruction: &genai.Content{
 				Parts: []*genai.Part{{Text: a.systemInstruction}},
 			},
-			Tools: a.getTools(tools),
+			Tools: a.getTools(),
 		}, []*genai.Content{})
 		if err != nil {
 			return nil, err
