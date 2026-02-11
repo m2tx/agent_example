@@ -102,7 +102,7 @@ func main() {
 func getModel() string {
 	model := os.Getenv("MODEL")
 	if model == "" {
-		model = "gemini-2.5-pro"
+		model = "gemini-2.5-flash"
 	}
 
 	return model
