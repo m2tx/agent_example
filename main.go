@@ -41,7 +41,7 @@ func main() {
 	}
 
 	http.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodDelete {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -55,8 +55,14 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-cache")
 
-		contents := a.GetSession(sessionID)
-		json.NewEncoder(w).Encode(contents)
+		if r.Method == http.MethodGet {
+			contents := a.GetSession(sessionID)
+			json.NewEncoder(w).Encode(contents)
+		}
+
+		if r.Method == http.MethodDelete {
+			a.ClearSession(sessionID)
+		}
 	})
 
 	http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
