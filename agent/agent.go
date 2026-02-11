@@ -23,7 +23,7 @@ type Agent struct {
 	model             string
 	systemInstruction string
 	functionsMap      map[string]*FunctionDeclaration
-	Session           map[string][]*genai.Content
+	Chats             map[string]*genai.Chat
 }
 
 type FunctionDeclaration struct {
@@ -42,7 +42,7 @@ func New(client *genai.Client, model string, systemInstruction string) *Agent {
 		model:             model,
 		systemInstruction: systemInstruction,
 		functionsMap:      make(map[string]*FunctionDeclaration),
-		Session:           make(map[string][]*genai.Content),
+		Chats:             make(map[string]*genai.Chat),
 	}
 }
 
@@ -86,31 +86,34 @@ func (a *Agent) getTools(functionNames []string) []*genai.Tool {
 }
 
 func (a *Agent) Send(ctx context.Context, sessionID string, tools []string, prompt string) (*Content, error) {
-	a.Session[sessionID] = append(a.Session[sessionID], &genai.Content{
-		Parts: []*genai.Part{
-			{
-				Text: prompt,
+	var chat *genai.Chat
+	var err error
+
+	chat = a.Chats[sessionID]
+	if chat == nil {
+		chat, err = a.client.Chats.Create(ctx, a.model, &genai.GenerateContentConfig{
+			SystemInstruction: &genai.Content{
+				Parts: []*genai.Part{{Text: a.systemInstruction}},
 			},
-		},
-		Role: genai.RoleUser,
+			Tools: a.getTools(tools),
+		}, []*genai.Content{})
+		if err != nil {
+			return nil, err
+		}
+
+		a.Chats[sessionID] = chat
+	}
+
+	resp, err := chat.SendMessage(ctx, genai.Part{
+		Text: prompt,
 	})
 
-	resp, err := a.client.Models.GenerateContent(ctx, a.model, a.Session[sessionID], &genai.GenerateContentConfig{
-		Tools: a.getTools(tools),
-		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{{Text: a.systemInstruction}},
-		},
-	})
+	resp, err = a.processResponse(ctx, chat, resp)
 	if err != nil {
 		return nil, err
 	}
 
-	partsGen, err := a.processResponse(ctx, sessionID, resp)
-	if err != nil {
-		return nil, err
-	}
-
-	parts, err := a.parseParts(partsGen)
+	parts, err := a.parseParts(resp.Candidates[0].Content.Parts)
 	if err != nil {
 		return nil, err
 	}
@@ -146,13 +149,18 @@ func (a *Agent) handleFunctionCall(ctx context.Context, functionName string, arg
 }
 
 func (a *Agent) ClearSession(sessionID string) {
-	a.Session[sessionID] = []*genai.Content{}
+	a.Chats[sessionID] = nil
 }
 
 func (a *Agent) GetSession(sessionID string) []Content {
-	contentList := a.Session[sessionID]
-	result := make([]Content, 0, len(contentList))
+	chat := a.Chats[sessionID]
+	if chat == nil {
+		return []Content{}
+	}
 
+	contentList := chat.History(true)
+
+	result := make([]Content, 0, len(contentList))
 	for _, content := range contentList {
 		parts, err := a.parseParts(content.Parts)
 		if err != nil {
@@ -166,8 +174,9 @@ func (a *Agent) GetSession(sessionID string) []Content {
 	return result
 }
 
-func (a *Agent) processResponse(ctx context.Context, sessionID string, resp *genai.GenerateContentResponse) ([]*genai.Part, error) {
-	parts := []*genai.Part{}
+func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *genai.GenerateContentResponse) (*genai.GenerateContentResponse, error) {
+	functionResponses := []genai.Part{}
+
 	for _, candidate := range resp.Candidates {
 		if candidate == nil || candidate.Content == nil {
 			continue
@@ -175,36 +184,30 @@ func (a *Agent) processResponse(ctx context.Context, sessionID string, resp *gen
 
 		for _, part := range candidate.Content.Parts {
 			if part.FunctionCall != nil {
-				log.Printf("FunctionCall: %s %v\n", part.FunctionCall.Name, part.FunctionCall.Args)
 				funcResp, err := a.handleFunctionCall(ctx, part.FunctionCall.Name, part.FunctionCall.Args)
 				if err != nil {
 					return nil, err
 				}
 
-				a.Session[sessionID] = append(a.Session[sessionID], candidate.Content, &genai.Content{
-					Parts: []*genai.Part{
-						{
-							FunctionResponse: &genai.FunctionResponse{
-								Name:     part.FunctionCall.Name,
-								Response: funcResp,
-							},
-						},
+				functionResponses = append(functionResponses, genai.Part{
+					FunctionResponse: &genai.FunctionResponse{
+						ID:       part.FunctionCall.ID,
+						Name:     part.FunctionCall.Name,
+						Response: funcResp,
 					},
 				})
-
-				resp, err := a.client.Models.GenerateContent(ctx, a.model, a.Session[sessionID], &genai.GenerateContentConfig{})
-				if err != nil {
-					return nil, err
-				}
-
-				return a.processResponse(ctx, sessionID, resp)
 			}
 		}
-
-		a.Session[sessionID] = append(a.Session[sessionID], candidate.Content)
-
-		parts = append(parts, candidate.Content.Parts...)
 	}
 
-	return parts, nil
+	if len(functionResponses) > 0 {
+		resp, err := chat.SendMessage(ctx, functionResponses...)
+		if err != nil {
+			return nil, err
+		}
+
+		return a.processResponse(ctx, chat, resp)
+	}
+
+	return resp, nil
 }
