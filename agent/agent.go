@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"google.golang.org/genai"
 )
@@ -16,6 +15,7 @@ type Part struct {
 
 type Content struct {
 	Parts []Part `json:"parts"`
+	Role  string `json:"role"`
 }
 
 type Agent struct {
@@ -83,11 +83,9 @@ func (a *Agent) getTools() []*genai.Tool {
 	}
 }
 
-func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) (*Content, error) {
-	var chat *genai.Chat
+func (a *Agent) getChat(ctx context.Context, sessionID string) (*genai.Chat, error) {
 	var err error
-
-	chat = a.Chats[sessionID]
+	chat := a.Chats[sessionID]
 	if chat == nil {
 		chat, err = a.client.Chats.Create(ctx, a.model, &genai.GenerateContentConfig{
 			SystemInstruction: &genai.Content{
@@ -102,21 +100,39 @@ func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) (*Con
 		a.Chats[sessionID] = chat
 	}
 
+	return chat, nil
+}
+
+func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]Content, error) {
+	chat, err := a.getChat(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
 	resp, err := chat.SendMessage(ctx, genai.Part{
 		Text: prompt,
 	})
 
-	resp, err = a.processResponse(ctx, chat, resp)
+	contents, err := a.processResponse(ctx, chat, resp)
 	if err != nil {
 		return nil, err
 	}
 
-	parts, err := a.parseParts(resp.Candidates[0].Content.Parts)
-	if err != nil {
-		return nil, err
+	return a.parseContents(contents)
+}
+
+func (a *Agent) parseContents(contents []*genai.Content) ([]Content, error) {
+	parsedContents := []Content{}
+	for _, content := range contents {
+		parsedParts, err := a.parseParts(content.Parts)
+		if err != nil {
+			return nil, err
+		}
+
+		parsedContents = append(parsedContents, Content{Parts: parsedParts, Role: content.Role})
 	}
 
-	return &Content{Parts: parts}, nil
+	return parsedContents, nil
 }
 
 func (a *Agent) parseParts(parts []*genai.Part) ([]Part, error) {
@@ -150,29 +166,17 @@ func (a *Agent) ClearSession(sessionID string) {
 	a.Chats[sessionID] = nil
 }
 
-func (a *Agent) GetSession(sessionID string) []Content {
+func (a *Agent) GetSession(sessionID string) ([]Content, error) {
 	chat := a.Chats[sessionID]
 	if chat == nil {
-		return []Content{}
+		return []Content{}, nil
 	}
 
-	contentList := chat.History(true)
-
-	result := make([]Content, 0, len(contentList))
-	for _, content := range contentList {
-		parts, err := a.parseParts(content.Parts)
-		if err != nil {
-			log.Printf("Error parsing parts: %v", err)
-			continue
-		}
-
-		result = append(result, Content{Parts: parts})
-	}
-
-	return result
+	return a.parseContents(chat.History(true))
 }
 
-func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *genai.GenerateContentResponse) (*genai.GenerateContentResponse, error) {
+func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *genai.GenerateContentResponse) ([]*genai.Content, error) {
+	contents := []*genai.Content{}
 	functionResponses := []genai.Part{}
 
 	for _, candidate := range resp.Candidates {
@@ -196,6 +200,8 @@ func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *gen
 				})
 			}
 		}
+
+		contents = append(contents, candidate.Content)
 	}
 
 	if len(functionResponses) > 0 {
@@ -204,8 +210,13 @@ func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *gen
 			return nil, err
 		}
 
-		return a.processResponse(ctx, chat, resp)
+		fContents, err := a.processResponse(ctx, chat, resp)
+		if err != nil {
+			return nil, err
+		}
+
+		contents = append(contents, fContents...)
 	}
 
-	return resp, nil
+	return contents, nil
 }

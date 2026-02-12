@@ -56,7 +56,12 @@ func main() {
 		w.Header().Set("Cache-Control", "no-cache")
 
 		if r.Method == http.MethodGet {
-			contents := a.GetSession(sessionID)
+			contents, err := a.GetSession(sessionID)
+			if err != nil {
+				http.Error(w, "get session", http.StatusInternalServerError)
+				return
+			}
+
 			json.NewEncoder(w).Encode(contents)
 		}
 
