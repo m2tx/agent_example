@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/m2tx/agent_example/agent"
+	"github.com/m2tx/agent_example/assets"
 	"google.golang.org/genai"
 )
 
@@ -40,7 +41,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	http.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFileFS(w, r, assets.Dir, "chat.html")
+	})
+
+	http.HandleFunc("/history", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodDelete {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -70,7 +75,7 @@ func main() {
 		}
 	})
 
-	http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/prompt", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
