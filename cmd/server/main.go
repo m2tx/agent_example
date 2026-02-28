@@ -11,6 +11,9 @@ import (
 	"github.com/m2tx/agent_example/assets"
 	"github.com/m2tx/agent_example/internal/agent"
 	"github.com/m2tx/agent_example/internal/functions"
+	"github.com/m2tx/agent_example/internal/repository"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/genai"
 )
 
@@ -23,7 +26,21 @@ func main() {
 		log.Fatal(err)
 	}
 
-	a := agent.New(client, getModel(), assets.SystemInstruction)
+	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(getMongoURI()))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := mongoClient.Disconnect(ctx); err != nil {
+			log.Printf("mongodb disconnect: %v", err)
+		}
+	}()
+
+	database := mongoClient.Database(getMongoDB())
+
+	repo := repository.NewMongoSessionRepository(database, "sessions")
+
+	a := agent.NewWithRepo(client, getModel(), assets.SystemInstruction, repo)
 	err = a.AddFunctionCall(functions.CreateWeatherFunctionDeclaration())
 	if err != nil {
 		log.Fatal(err)
@@ -69,7 +86,7 @@ func main() {
 		}
 
 		if r.Method == http.MethodDelete {
-			a.ClearSession(sessionID)
+			a.ClearSession(r.Context(), sessionID)
 		}
 	})
 
@@ -98,7 +115,7 @@ func main() {
 			return
 		}
 
-		resp, err := a.Send(ctx, req.SessionID, req.Prompt)
+		resp, err := a.Send(r.Context(), req.SessionID, req.Prompt)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -129,4 +146,22 @@ func getHttpPort() string {
 	}
 
 	return port
+}
+
+func getMongoURI() string {
+	uri := os.Getenv("MONGODB_URI")
+	if uri == "" {
+		uri = "mongodb://localhost:27017"
+	}
+
+	return uri
+}
+
+func getMongoDB() string {
+	db := os.Getenv("MONGODB_DB")
+	if db == "" {
+		db = "agent_sessions"
+	}
+
+	return db
 }

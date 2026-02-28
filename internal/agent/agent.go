@@ -4,26 +4,18 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/m2tx/agent_example/internal/model"
+	"github.com/m2tx/agent_example/internal/repository"
 	"google.golang.org/genai"
 )
-
-type Part struct {
-	Text             string `json:"text,omitempty"`
-	FunctionCall     string `json:"function_call,omitempty"`
-	FunctionResponse string `json:"function_response,omitempty"`
-}
-
-type Content struct {
-	Parts []Part `json:"parts"`
-	Role  string `json:"role"`
-}
 
 type Agent struct {
 	client            *genai.Client
 	model             string
 	systemInstruction string
 	functionsMap      map[string]*FunctionDeclaration
-	Chats             map[string]*genai.Chat
+	chats             map[string]*genai.Chat
+	sessionRepository repository.SessionRepository
 }
 
 type FunctionDeclaration struct {
@@ -42,8 +34,14 @@ func New(client *genai.Client, model string, systemInstruction string) *Agent {
 		model:             model,
 		systemInstruction: systemInstruction,
 		functionsMap:      make(map[string]*FunctionDeclaration),
-		Chats:             make(map[string]*genai.Chat),
+		chats:             make(map[string]*genai.Chat),
 	}
+}
+
+func NewWithRepo(client *genai.Client, model string, systemInstruction string, sessionRepository repository.SessionRepository) *Agent {
+	a := New(client, model, systemInstruction)
+	a.sessionRepository = sessionRepository
+	return a
 }
 
 func (a *Agent) AddFunctionCall(functionDeclaration *FunctionDeclaration) error {
@@ -84,26 +82,38 @@ func (a *Agent) getTools() []*genai.Tool {
 }
 
 func (a *Agent) getChat(ctx context.Context, sessionID string) (*genai.Chat, error) {
-	var err error
-	chat := a.Chats[sessionID]
-	if chat == nil {
-		chat, err = a.client.Chats.Create(ctx, a.model, &genai.GenerateContentConfig{
-			SystemInstruction: &genai.Content{
-				Parts: []*genai.Part{{Text: a.systemInstruction}},
-			},
-			Tools: a.getTools(),
-		}, []*genai.Content{})
-		if err != nil {
-			return nil, err
-		}
-
-		a.Chats[sessionID] = chat
+	chat := a.chats[sessionID]
+	if chat != nil {
+		return chat, nil
 	}
 
+	initialHistory := []*genai.Content{}
+	if a.sessionRepository != nil {
+		stored, err := a.sessionRepository.Load(ctx, sessionID)
+		if err != nil {
+			return nil, fmt.Errorf("getChat: load history: %w", err)
+		}
+		if stored != nil {
+			initialHistory = toGenAIContents(stored)
+		}
+	}
+
+	var err error
+	chat, err = a.client.Chats.Create(ctx, a.model, &genai.GenerateContentConfig{
+		SystemInstruction: &genai.Content{
+			Parts: []*genai.Part{{Text: a.systemInstruction}},
+		},
+		Tools: a.getTools(),
+	}, initialHistory)
+	if err != nil {
+		return nil, err
+	}
+
+	a.chats[sessionID] = chat
 	return chat, nil
 }
 
-func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]Content, error) {
+func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]model.Content, error) {
 	chat, err := a.getChat(ctx, sessionID)
 	if err != nil {
 		return nil, err
@@ -112,46 +122,41 @@ func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]Co
 	resp, err := chat.SendMessage(ctx, genai.Part{
 		Text: prompt,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	contents, err := a.processResponse(ctx, chat, resp)
 	if err != nil {
 		return nil, err
 	}
 
-	return a.parseContents(contents)
-}
-
-func (a *Agent) parseContents(contents []*genai.Content) ([]Content, error) {
-	parsedContents := []Content{}
-	for _, content := range contents {
-		parsedParts, err := a.parseParts(content.Parts)
-		if err != nil {
-			return nil, err
+	if a.sessionRepository != nil {
+		if saveErr := a.sessionRepository.Save(ctx, sessionID, toModelContents(chat.History(true))); saveErr != nil {
+			fmt.Printf("agent: warning: failed to save session %q: %v\n", sessionID, saveErr)
 		}
-
-		parsedContents = append(parsedContents, Content{Parts: parsedParts, Role: content.Role})
 	}
 
-	return parsedContents, nil
+	return parseContents(contents)
 }
 
-func (a *Agent) parseParts(parts []*genai.Part) ([]Part, error) {
-	parsedParts := []Part{}
-	for _, part := range parts {
-		if part.FunctionCall != nil {
-			parsedParts = append(parsedParts, Part{FunctionCall: fmt.Sprintf("%s %v", part.FunctionCall.Name, part.FunctionCall.Args)})
-			continue
-		}
+func (a *Agent) ClearSession(ctx context.Context, sessionID string) {
+	a.chats[sessionID] = nil
 
-		if part.FunctionResponse != nil {
-			parsedParts = append(parsedParts, Part{FunctionResponse: fmt.Sprintf("%s %v", part.FunctionResponse.Name, part.FunctionResponse.Response)})
-			continue
+	if a.sessionRepository != nil {
+		if err := a.sessionRepository.Delete(ctx, sessionID); err != nil {
+			fmt.Printf("agent: warning: failed to delete session %q: %v\n", sessionID, err)
 		}
+	}
+}
 
-		parsedParts = append(parsedParts, Part{Text: part.Text})
+func (a *Agent) GetSession(sessionID string) ([]model.Content, error) {
+	chat := a.chats[sessionID]
+	if chat == nil {
+		return []model.Content{}, nil
 	}
 
-	return parsedParts, nil
+	return parseContents(chat.History(true))
 }
 
 func (a *Agent) handleFunctionCall(ctx context.Context, functionName string, args map[string]any) (map[string]any, error) {
@@ -160,19 +165,6 @@ func (a *Agent) handleFunctionCall(ctx context.Context, functionName string, arg
 	}
 
 	return nil, fmt.Errorf("function %s not found", functionName)
-}
-
-func (a *Agent) ClearSession(sessionID string) {
-	a.Chats[sessionID] = nil
-}
-
-func (a *Agent) GetSession(sessionID string) ([]Content, error) {
-	chat := a.Chats[sessionID]
-	if chat == nil {
-		return []Content{}, nil
-	}
-
-	return a.parseContents(chat.History(true))
 }
 
 func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *genai.GenerateContentResponse) ([]*genai.Content, error) {
@@ -219,4 +211,101 @@ func (a *Agent) processResponse(ctx context.Context, chat *genai.Chat, resp *gen
 	}
 
 	return contents, nil
+}
+
+// parseContents converts a slice of genai.Content into []model.Content for the API response.
+func parseContents(contents []*genai.Content) ([]model.Content, error) {
+	parsed := make([]model.Content, 0, len(contents))
+	for _, c := range contents {
+		parts, err := parseParts(c.Parts)
+		if err != nil {
+			return nil, err
+		}
+		parsed = append(parsed, model.Content{Parts: parts, Role: c.Role})
+	}
+	return parsed, nil
+}
+
+func parseParts(parts []*genai.Part) ([]model.Part, error) {
+	parsed := make([]model.Part, 0, len(parts))
+	for _, p := range parts {
+		switch {
+		case p.FunctionCall != nil:
+			parsed = append(parsed, model.Part{
+				FunctionCall: &model.FunctionCall{
+					ID:   p.FunctionCall.ID,
+					Name: p.FunctionCall.Name,
+					Args: p.FunctionCall.Args,
+				},
+			})
+		case p.FunctionResponse != nil:
+			parsed = append(parsed, model.Part{
+				FunctionResponse: &model.FunctionResponse{
+					ID:       p.FunctionResponse.ID,
+					Name:     p.FunctionResponse.Name,
+					Response: p.FunctionResponse.Response,
+				},
+			})
+		default:
+			parsed = append(parsed, model.Part{Text: p.Text})
+		}
+	}
+	return parsed, nil
+}
+
+// toModelContents converts genai history to []model.Content for persistence.
+func toModelContents(contents []*genai.Content) []model.Content {
+	result := make([]model.Content, 0, len(contents))
+	for _, c := range contents {
+		mc := model.Content{Role: c.Role, Parts: make([]model.Part, 0, len(c.Parts))}
+		for _, p := range c.Parts {
+			mp := model.Part{Text: p.Text}
+			if p.FunctionCall != nil {
+				mp.FunctionCall = &model.FunctionCall{
+					ID:   p.FunctionCall.ID,
+					Name: p.FunctionCall.Name,
+					Args: p.FunctionCall.Args,
+				}
+			}
+			if p.FunctionResponse != nil {
+				mp.FunctionResponse = &model.FunctionResponse{
+					ID:       p.FunctionResponse.ID,
+					Name:     p.FunctionResponse.Name,
+					Response: p.FunctionResponse.Response,
+				}
+			}
+			mc.Parts = append(mc.Parts, mp)
+		}
+		result = append(result, mc)
+	}
+	return result
+}
+
+// toGenAIContents converts []model.Content from persistence back to genai history.
+func toGenAIContents(contents []model.Content) []*genai.Content {
+	result := make([]*genai.Content, 0, len(contents))
+	for _, c := range contents {
+		gc := &genai.Content{Role: c.Role, Parts: make([]*genai.Part, 0, len(c.Parts))}
+		for _, p := range c.Parts {
+			gp := &genai.Part{Text: p.Text}
+			if p.FunctionCall != nil {
+				gp.FunctionCall = &genai.FunctionCall{
+					ID:   p.FunctionCall.ID,
+					Name: p.FunctionCall.Name,
+					Args: p.FunctionCall.Args,
+				}
+			}
+			if p.FunctionResponse != nil {
+				gp.FunctionResponse = &genai.FunctionResponse{
+
+					ID:       p.FunctionResponse.ID,
+					Name:     p.FunctionResponse.Name,
+					Response: p.FunctionResponse.Response,
+				}
+			}
+			gc.Parts = append(gc.Parts, gp)
+		}
+		result = append(result, gc)
+	}
+	return result
 }
