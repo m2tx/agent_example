@@ -76,7 +76,7 @@ func main() {
 		w.Header().Set("Cache-Control", "no-cache")
 
 		if r.Method == http.MethodGet {
-			contents, err := a.GetSession(sessionID)
+			contents, err := a.GetSession(r.Context(), sessionID)
 			if err != nil {
 				http.Error(w, "get session", http.StatusInternalServerError)
 				return

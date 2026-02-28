@@ -14,7 +14,6 @@ type Agent struct {
 	model             string
 	systemInstruction string
 	functionsMap      map[string]*FunctionDeclaration
-	chats             map[string]*genai.Chat
 	sessionRepository repository.SessionRepository
 }
 
@@ -34,7 +33,6 @@ func New(client *genai.Client, model string, systemInstruction string) *Agent {
 		model:             model,
 		systemInstruction: systemInstruction,
 		functionsMap:      make(map[string]*FunctionDeclaration),
-		chats:             make(map[string]*genai.Chat),
 	}
 }
 
@@ -82,11 +80,6 @@ func (a *Agent) getTools() []*genai.Tool {
 }
 
 func (a *Agent) getChat(ctx context.Context, sessionID string) (*genai.Chat, error) {
-	chat := a.chats[sessionID]
-	if chat != nil {
-		return chat, nil
-	}
-
 	initialHistory := []*genai.Content{}
 	if a.sessionRepository != nil {
 		stored, err := a.sessionRepository.Load(ctx, sessionID)
@@ -98,8 +91,7 @@ func (a *Agent) getChat(ctx context.Context, sessionID string) (*genai.Chat, err
 		}
 	}
 
-	var err error
-	chat, err = a.client.Chats.Create(ctx, a.model, &genai.GenerateContentConfig{
+	chat, err := a.client.Chats.Create(ctx, a.model, &genai.GenerateContentConfig{
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{{Text: a.systemInstruction}},
 		},
@@ -109,7 +101,6 @@ func (a *Agent) getChat(ctx context.Context, sessionID string) (*genai.Chat, err
 		return nil, err
 	}
 
-	a.chats[sessionID] = chat
 	return chat, nil
 }
 
@@ -141,8 +132,6 @@ func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]mo
 }
 
 func (a *Agent) ClearSession(ctx context.Context, sessionID string) {
-	a.chats[sessionID] = nil
-
 	if a.sessionRepository != nil {
 		if err := a.sessionRepository.Delete(ctx, sessionID); err != nil {
 			fmt.Printf("agent: warning: failed to delete session %q: %v\n", sessionID, err)
@@ -150,13 +139,21 @@ func (a *Agent) ClearSession(ctx context.Context, sessionID string) {
 	}
 }
 
-func (a *Agent) GetSession(sessionID string) ([]model.Content, error) {
-	chat := a.chats[sessionID]
-	if chat == nil {
+func (a *Agent) GetSession(ctx context.Context, sessionID string) ([]model.Content, error) {
+	if a.sessionRepository == nil {
 		return []model.Content{}, nil
 	}
 
-	return parseContents(chat.History(true))
+	stored, err := a.sessionRepository.Load(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("GetSession: %w", err)
+	}
+
+	if stored == nil {
+		return []model.Content{}, nil
+	}
+
+	return stored, nil
 }
 
 func (a *Agent) handleFunctionCall(ctx context.Context, functionName string, args map[string]any) (map[string]any, error) {
