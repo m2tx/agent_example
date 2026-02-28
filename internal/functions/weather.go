@@ -1,13 +1,13 @@
-package main
+package functions
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/m2tx/agent_example/agent"
+	"github.com/m2tx/agent_example/internal/agent"
 )
 
-func createWeatherFunctionDeclaration() *agent.FunctionDeclaration {
+func CreateWeatherFunctionDeclaration() *agent.FunctionDeclaration {
 	return &agent.FunctionDeclaration{
 		Name:        "get_weather",
 		Description: "Busca o clima atual de uma cidade",

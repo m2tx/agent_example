@@ -8,13 +8,11 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/m2tx/agent_example/agent"
 	"github.com/m2tx/agent_example/assets"
+	"github.com/m2tx/agent_example/internal/agent"
+	"github.com/m2tx/agent_example/internal/functions"
 	"google.golang.org/genai"
 )
-
-//go:embed system_instruction.txt
-var systemInstruction string
 
 func main() {
 	ctx := context.Background()
@@ -25,18 +23,18 @@ func main() {
 		log.Fatal(err)
 	}
 
-	a := agent.New(client, getModel(), systemInstruction)
-	err = a.AddFunctionCall(createWeatherFunctionDeclaration())
+	a := agent.New(client, getModel(), assets.SystemInstruction)
+	err = a.AddFunctionCall(functions.CreateWeatherFunctionDeclaration())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = a.AddFunctionCall(createCompanyFunctionDeclaration())
+	err = a.AddFunctionCall(functions.CreateCompanyFunctionDeclaration())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = a.AddFunctionCall(createCollaboratorsFunctionDeclaration())
+	err = a.AddFunctionCall(functions.CreateCollaboratorsFunctionDeclaration())
 	if err != nil {
 		log.Fatal(err)
 	}

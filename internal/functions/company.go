@@ -1,12 +1,12 @@
-package main
+package functions
 
 import (
 	"context"
 
-	"github.com/m2tx/agent_example/agent"
+	"github.com/m2tx/agent_example/internal/agent"
 )
 
-func createCompanyFunctionDeclaration() *agent.FunctionDeclaration {
+func CreateCompanyFunctionDeclaration() *agent.FunctionDeclaration {
 	return &agent.FunctionDeclaration{
 		Name:        "get_companies",
 		Description: "Busca as empresas que tenho acesso.",
@@ -49,7 +49,7 @@ func createCompanyFunctionDeclaration() *agent.FunctionDeclaration {
 	}
 }
 
-func createCollaboratorsFunctionDeclaration() *agent.FunctionDeclaration {
+func CreateCollaboratorsFunctionDeclaration() *agent.FunctionDeclaration {
 	return &agent.FunctionDeclaration{
 		Name:        "get_collaborators",
 		Description: "Busca os colaboradores da empresa.",
