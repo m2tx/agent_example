@@ -3,6 +3,7 @@ module github.com/m2tx/agent_example
 go 1.25.1
 
 require (
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	go.mongodb.org/mongo-driver v1.17.1
 	google.golang.org/genai v1.43.0
 )

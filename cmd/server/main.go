@@ -20,7 +20,8 @@ import (
 func main() {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		Backend: genai.BackendGeminiAPI,
+		Backend:     genai.BackendGeminiAPI,
+		HTTPOptions: genai.HTTPOptions{APIVersion: "v1beta"},
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -40,6 +41,11 @@ func main() {
 
 	repo := repository.NewMongoSessionRepository(database, "sessions")
 
+	embedder := agent.NewEmbedder(client)
+	if err := embedder.Index(ctx, "../../docs"); err != nil {
+		log.Fatal(err)
+	}
+
 	a := agent.NewWithRepo(client, getModel(), assets.SystemInstruction, repo)
 	err = a.AddFunctionCall(functions.CreateWeatherFunctionDeclaration())
 	if err != nil {
@@ -52,6 +58,11 @@ func main() {
 	}
 
 	err = a.AddFunctionCall(functions.CreateCollaboratorsFunctionDeclaration())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = a.AddFunctionCall(functions.CreateDocsSearchFunctionDeclaration(embedder))
 	if err != nil {
 		log.Fatal(err)
 	}

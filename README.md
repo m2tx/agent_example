@@ -1,14 +1,16 @@
 # Agent Example
 
-A Go-based agentic system powered by Google's Gemini API with function calling, MongoDB-backed session persistence, and a REST API with a built-in chat UI.
+A Go-based agentic system powered by Google's Gemini API with function calling, MongoDB-backed session persistence, semantic document search, and a REST API with a built-in chat UI.
 
 ## Features
 
-- **Intelligent Agent**: Powered by Gemini API with configurable system instructions
+- **Intelligent Agent**: Powered by Gemini API with a configurable generic system instruction
 - **Function Calling**: The agent can invoke tools:
   - `get_weather` - Retrieve current weather information for a location
   - `get_companies` - List accessible companies
   - `get_collaborators` - Retrieve employee/collaborator information for a company
+  - `search_docs` - Semantic search over indexed documentation using embeddings
+- **Document Indexing**: Automatically indexes a docs directory at startup using Gemini embeddings
 - **Session Persistence**: Conversation history stored in MongoDB per session
 - **REST API**:
   - `GET /` - Built-in chat UI
@@ -21,17 +23,21 @@ A Go-based agentic system powered by Google's Gemini API with function calling, 
 
 ```
 cmd/server/main.go              # HTTP server, agent setup, route handlers
-internal/agent/agent.go         # Core agent: session management, function call loop
+internal/agent/
+  agent.go                      # Core agent: session management, function call loop
+  embedder.go                   # Gemini-based document embedder for semantic search
 internal/functions/
   weather.go                    # Weather function declaration
   company.go                    # Company and collaborator function declarations
+  docs.go                       # Docs semantic search function declaration
 internal/model/content.go       # Content/Part types for serializable history
 internal/repository/
   repository.go                 # SessionRepository interface
   mongodb.go                    # MongoDB-backed session persistence
 assets/
   chat.html                     # Embedded chat UI
-  system_instruction.txt        # Embedded system prompt
+  system_instruction.txt        # Embedded system prompt (generic AI assistant)
+docs/                           # Documents indexed at startup for search_docs tool
 ```
 
 ### How It Works
@@ -85,7 +91,7 @@ go build -o agent ./cmd/server
 ```bash
 curl -X POST http://localhost:8080/prompt \
   -H "Content-Type: application/json" \
-  -d '{"session_id": "user-123", "prompt": "What companies do I have access to?"}'
+  -d '{"session_id": "user-123", "prompt": "What is the weather in London?"}'
 ```
 
 ### Retrieve Session History

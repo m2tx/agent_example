@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Go-based agentic system that uses Google's Gemini API to power an intelligent agent with function calling capabilities. The agent can reason about user requests and invoke registered tools to retrieve information, maintaining multi-turn conversation sessions via a REST API.
+This is a Go-based agentic system that uses Google's Gemini API to power a generic AI assistant with function calling and semantic document search capabilities. The agent can reason about user requests and invoke registered tools, maintaining multi-turn conversation sessions via a REST API.
 
 ## Build and Run Commands
 
@@ -47,11 +47,14 @@ The project implements an **agentic system with automatic function calling**. He
 ### Key Components
 
 - **`agent.Agent`** (`internal/agent/agent.go`): Core agent orchestrator
-  - Manages Gemini chat sessions per session ID (stored in `Chats` map)
   - Handles function declaration registration via `AddFunctionCall()`
   - Processes Gemini responses and automatically invokes tool functions via `handleFunctionCall()`
   - Recursively processes responses until no more function calls are needed (`processResponse()`)
   - Returns parsed content with both text and function call information
+
+- **`agent.Embedder`** (`internal/agent/embedder.go`): Document embedder for semantic search
+  - Indexes a directory of documents at startup using Gemini embedding models
+  - Used by the `search_docs` function to find relevant documentation
 
 - **`FunctionDeclaration`**: Wrapper for tool metadata and implementation
   - Defines the tool's schema (name, description, parameters, response structure)
@@ -60,8 +63,9 @@ The project implements an **agentic system with automatic function calling**. He
 
 - **Server** (`cmd/server/main.go`): REST API server
   - Routes: `/` (UI), `/prompt` (POST to chat), `/history` (GET/DELETE session)
-  - Loads system instruction from embedded assets
-  - Initializes agent with registered functions
+  - Loads system instruction from embedded assets (`assets/system_instruction.txt`)
+  - Initializes `Embedder` and indexes `docs/` directory at startup
+  - Initializes agent with registered functions: `get_weather`, `get_companies`, `get_collaborators`, `search_docs`
 
 ### Function Declaration Pattern
 
@@ -96,7 +100,8 @@ Environment variables:
 ## Important Implementation Details
 
 - **Session Storage**: MongoDB-backed via `repository.SessionRepository`. Each `Send()` call loads history, creates a fresh `genai.Chat`, then saves updated history back. No in-memory chat cache.
-- **System Instruction**: Loaded from `assets/system_instruction.txt` and embedded in binary
+- **System Instruction**: Loaded from `assets/system_instruction.txt` and embedded in binary. Configured as a generic AI assistant that uses `search_docs` before answering when documentation may be relevant.
+- **Document Indexing**: `Embedder` indexes the `docs/` directory at startup; the `search_docs` tool uses these embeddings for semantic retrieval
 - **Recursive Processing**: `processResponse()` is recursive to handle chains of function calls
 - **Error Handling**: Gemini API errors propagate to HTTP client; function execution errors are returned to Gemini
 - **No Tests**: Currently no test coverage. Suggested areas: function handlers, agent response parsing, session management
