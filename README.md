@@ -1,15 +1,6 @@
 # Agent Example
 
-This project demonstrates how to build an intelligent agent with function calling capabilities, session management, and REST API integration.
-
-## Overview
-
-This project implements an agentic system that:
-- Uses Google's Gemini 2.5 Pro model for intelligent reasoning
-- Provides function calling capabilities for retrieving information
-- Maintains conversation sessions for continuous multi-turn interactions
-- Exposes a REST API for chat-based interactions
-- Demonstrates real-world patterns for agent implementation in Go
+A Go-based agentic system powered by Google's Gemini API with function calling, MongoDB-backed session persistence, and a REST API with a built-in chat UI.
 
 ## Features
 
@@ -18,33 +9,53 @@ This project implements an agentic system that:
   - `get_weather` - Retrieve current weather information for a location
   - `get_companies` - List accessible companies
   - `get_collaborators` - Retrieve employee/collaborator information for a company
-- **Session Management**: Maintains conversation history per session
-- **REST API**: 
-  - `GET /session?session_id=<id>` - Retrieve session conversation history
-  - `POST /chat` - Send messages and interact with the agent
-- **Configurable**: Environment variables for model selection and HTTP port
+- **Session Persistence**: Conversation history stored in MongoDB per session
+- **REST API**:
+  - `GET /` - Built-in chat UI
+  - `POST /prompt` - Send a prompt and get a response
+  - `GET /history?session_id=<id>` - Retrieve session conversation history
+  - `DELETE /history?session_id=<id>` - Clear a session
+- **Configurable**: Environment variables for model selection, HTTP port, and MongoDB connection
 
 ## Architecture
 
 ```
-main.go                 # HTTP server and agent setup
-agent/agent.go          # Core agent implementation with session management
-company.go              # Company and collaborator function declarations
-weather.go              # Weather function declaration
+cmd/server/main.go              # HTTP server, agent setup, route handlers
+internal/agent/agent.go         # Core agent: session management, function call loop
+internal/functions/
+  weather.go                    # Weather function declaration
+  company.go                    # Company and collaborator function declarations
+internal/model/content.go       # Content/Part types for serializable history
+internal/repository/
+  repository.go                 # SessionRepository interface
+  mongodb.go                    # MongoDB-backed session persistence
+assets/
+  chat.html                     # Embedded chat UI
+  system_instruction.txt        # Embedded system prompt
 ```
 
-The agent implements a function declaration pattern that allows you to:
-1. Define function metadata (name, description, parameter schema, response schema)
-2. Provide implementation functions that the agent can call
-3. Automatically handle function calls and responses in the agent's reasoning loop
+### How It Works
+
+1. The client sends a prompt to `/prompt` with a `session_id`
+2. The agent loads session history from MongoDB and passes the prompt to Gemini
+3. If Gemini requests a tool call, the agent executes it and feeds the result back
+4. This loop continues until Gemini returns a final text response
+5. The updated history is saved back to MongoDB
+
+### Adding a New Tool
+
+1. Create a `CreateXFunctionDeclaration()` in `internal/functions/` returning `*agent.FunctionDeclaration`
+2. Define the JSON schema for parameters and response
+3. Implement the `FunctionCall` handler (`map[string]any` → `any, error`)
+4. Register it in `main()` via `a.AddFunctionCall()`
 
 ## Getting Started
 
 ### Prerequisites
 
-- Go 1.20+
-- Google Cloud credentials (for Gemini API access)
-- Set `GEMINI_API_KEY` environment variable
+- Go 1.21+
+- MongoDB instance
+- Gemini API key — set `GEMINI_API_KEY` environment variable
 
 ### Installation
 
@@ -56,39 +67,44 @@ go mod vendor
 ### Running
 
 ```bash
-# Default: runs on port 8080 with gemini-2.5-pro model
-go run *.go
+# Default: port 8080, gemini-2.5-flash, MongoDB at localhost:27017
+go run ./cmd/server
 
-# With custom configuration
-HTTP_PORT=8081 MODEL=gemini-2.5-flash go run *.go
+# Custom configuration
+HTTP_PORT=8081 MODEL=gemini-2.5-pro MONGODB_URI=mongodb://host:27017 go run ./cmd/server
+
+# Build a binary
+go build -o agent ./cmd/server
 ```
 
 ## Usage
 
-### Start a Conversation
+### Send a Prompt
 
 ```bash
-curl -X POST http://localhost:8080/chat \
+curl -X POST http://localhost:8080/prompt \
   -H "Content-Type: application/json" \
-  -d '{
-    "session_id": "user-123",
-    "prompt": "Quais são as empresas que tenho acesso?"
-  }'
+  -d '{"session_id": "user-123", "prompt": "What companies do I have access to?"}'
 ```
 
 ### Retrieve Session History
 
 ```bash
-curl http://localhost:8080/session?session_id=user-123
+curl http://localhost:8080/history?session_id=user-123
+```
+
+### Clear a Session
+
+```bash
+curl -X DELETE http://localhost:8080/history?session_id=user-123
 ```
 
 ## Configuration
 
-- `HTTP_PORT`: HTTP server port (default: 8080)
-- `MODEL`: Gemini model to use (default: gemini-2.5-pro)
-- `GEMINI_API_KEY`: Google API key for Gemini access (required)
-
-## Notes
-
-- Session data is stored in-memory; consider persistent storage for production
-- Function implementations can be extended to integrate with actual backend systems and data sources
+| Variable       | Default                     | Description                        |
+|----------------|-----------------------------|------------------------------------|
+| `GEMINI_API_KEY` | *(required)*              | Google API key for Gemini access   |
+| `MODEL`        | `gemini-2.5-flash`          | Gemini model to use                |
+| `HTTP_PORT`    | `8080`                      | HTTP server port                   |
+| `MONGODB_URI`  | `mongodb://localhost:27017` | MongoDB connection URI             |
+| `MONGODB_DB`   | `agent_sessions`            | MongoDB database name              |
