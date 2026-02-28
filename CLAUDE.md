@@ -79,10 +79,10 @@ The agent automatically handles:
 
 ### Session Management
 
-- Each session ID gets its own `genai.Chat` object maintaining conversation history
-- History is retrieved via `GetSession(sessionID)`
-- Cleared via `ClearSession(sessionID)` (in-memory only; not persistent)
-- The `Content` and `Part` types represent the serializable response format
+- Each call to `Send()` loads history from MongoDB, creates a fresh `genai.Chat`, then saves history back after the response
+- History is retrieved via `GetSession(sessionID)` (reads from MongoDB)
+- Cleared via `ClearSession(sessionID)` (deletes from MongoDB)
+- The `Content` and `Part` types represent the serializable model stored in MongoDB
 
 ## Configuration
 
@@ -90,10 +90,12 @@ Environment variables:
 - `GEMINI_API_KEY`: Required. Google API key for Gemini access
 - `MODEL`: Gemini model to use (default: `gemini-2.5-flash`). Try `gemini-2.5-pro` for better reasoning
 - `HTTP_PORT`: Server port (default: `8080`)
+- `MONGODB_URI`: MongoDB connection URI (default: `mongodb://localhost:27017`)
+- `MONGODB_DB`: MongoDB database name (default: `agent_sessions`)
 
 ## Important Implementation Details
 
-- **Session Storage**: Currently in-memory via `map[string]*genai.Chat`. Not suitable for production without persistence layer
+- **Session Storage**: MongoDB-backed via `repository.SessionRepository`. Each `Send()` call loads history, creates a fresh `genai.Chat`, then saves updated history back. No in-memory chat cache.
 - **System Instruction**: Loaded from `assets/system_instruction.txt` and embedded in binary
 - **Recursive Processing**: `processResponse()` is recursive to handle chains of function calls
 - **Error Handling**: Gemini API errors propagate to HTTP client; function execution errors are returned to Gemini

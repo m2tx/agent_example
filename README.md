@@ -68,13 +68,14 @@ go mod vendor
 
 ```bash
 # Default: port 8080, gemini-2.5-flash, MongoDB at localhost:27017
-go run ./cmd/server
+GEMINI_API_KEY=your-api-key go run ./cmd/server
 
 # Custom configuration
-HTTP_PORT=8081 MODEL=gemini-2.5-pro MONGODB_URI=mongodb://host:27017 go run ./cmd/server
+GEMINI_API_KEY=your-api-key HTTP_PORT=8081 MODEL=gemini-2.5-pro MONGODB_URI=mongodb://host:27017 go run ./cmd/server
 
 # Build a binary
 go build -o agent ./cmd/server
+./agent
 ```
 
 ## Usage
