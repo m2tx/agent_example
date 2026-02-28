@@ -2,8 +2,8 @@ package agent
 
 import (
 	"bytes"
-	"context"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"math"
 	"os"
@@ -12,10 +12,9 @@ import (
 	"strings"
 
 	"github.com/ledongthuc/pdf"
-	"google.golang.org/genai"
 )
 
-const embeddingModel = "gemini-embedding-001"
+const embeddingDim = 512
 const defaultChunkSize = 800
 
 // EmbeddedDocument is a text chunk paired with its embedding vector.
@@ -25,20 +24,19 @@ type EmbeddedDocument struct {
 	Embedding []float32
 }
 
-// Embedder indexes documents and provides semantic search via the Gemini embedding API.
+// Embedder indexes documents and provides semantic search via local hash embeddings.
 type Embedder struct {
-	client *genai.Client
-	docs   []EmbeddedDocument
+	docs []EmbeddedDocument
 }
 
-// NewEmbedder creates an Embedder backed by the given genai.Client.
-func NewEmbedder(client *genai.Client) *Embedder {
-	return &Embedder{client: client}
+// NewEmbedder creates a new Embedder.
+func NewEmbedder() *Embedder {
+	return &Embedder{}
 }
 
-// Index loads and embeds all .txt and .md files from dir.
+// Index loads and embeds all .txt, .md, and .pdf files from dir.
 // Returns without error if the directory is empty or does not exist.
-func (e *Embedder) Index(ctx context.Context, dir string) error {
+func (e *Embedder) Index(dir string) error {
 	chunks, err := loadChunks(dir)
 	if err != nil {
 		return fmt.Errorf("embedder: load chunks: %w", err)
@@ -50,14 +48,10 @@ func (e *Embedder) Index(ctx context.Context, dir string) error {
 	}
 
 	for _, c := range chunks {
-		vec, err := e.embed(ctx, c.text, "RETRIEVAL_DOCUMENT")
-		if err != nil {
-			return fmt.Errorf("embedder: embed %q: %w", c.filename, err)
-		}
 		e.docs = append(e.docs, EmbeddedDocument{
 			Filename:  c.filename,
 			Text:      c.text,
-			Embedding: vec,
+			Embedding: embed(c.text),
 		})
 	}
 
@@ -66,15 +60,12 @@ func (e *Embedder) Index(ctx context.Context, dir string) error {
 }
 
 // Search returns the topK most relevant chunks for the given query.
-func (e *Embedder) Search(ctx context.Context, query string, topK int) ([]EmbeddedDocument, error) {
+func (e *Embedder) Search(query string, topK int) ([]EmbeddedDocument, error) {
 	if len(e.docs) == 0 {
 		return nil, nil
 	}
 
-	queryVec, err := e.embed(ctx, query, "RETRIEVAL_QUERY")
-	if err != nil {
-		return nil, fmt.Errorf("embedder: embed query: %w", err)
-	}
+	queryVec := embed(query)
 
 	type scored struct {
 		doc   EmbeddedDocument
@@ -99,19 +90,24 @@ func (e *Embedder) Search(ctx context.Context, query string, topK int) ([]Embedd
 	return out, nil
 }
 
-func (e *Embedder) embed(ctx context.Context, text, taskType string) ([]float32, error) {
-	resp, err := e.client.Models.EmbedContent(ctx, embeddingModel, []*genai.Content{
-		{Parts: []*genai.Part{{Text: text}}},
-	}, &genai.EmbedContentConfig{
-		TaskType: taskType,
-	})
-	if err != nil {
-		return nil, err
+// embed converts text into a fixed-size vector using feature hashing (no external model).
+func embed(text string) []float32 {
+	vec := make([]float32, embeddingDim)
+	for _, word := range strings.Fields(strings.ToLower(text)) {
+		h := fnv.New32a()
+		h.Write([]byte(word))
+		vec[int(h.Sum32())%embeddingDim]++
 	}
-	if len(resp.Embeddings) == 0 {
-		return nil, fmt.Errorf("no embeddings returned")
+	var norm float64
+	for _, v := range vec {
+		norm += float64(v) * float64(v)
 	}
-	return resp.Embeddings[0].Values, nil
+	if norm = math.Sqrt(norm); norm > 0 {
+		for i := range vec {
+			vec[i] = float32(float64(vec[i]) / norm)
+		}
+	}
+	return vec
 }
 
 // ---- internal chunk helpers ----

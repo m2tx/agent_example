@@ -50,7 +50,7 @@ func CreateDocsSearchFunctionDeclaration(e *agent.Embedder) *agent.FunctionDecla
 				return nil, fmt.Errorf("search_docs: query argument is required")
 			}
 
-			docs, err := e.Search(ctx, query, 3)
+			docs, err := e.Search(query, 3)
 			if err != nil {
 				return nil, fmt.Errorf("search_docs: %w", err)
 			}

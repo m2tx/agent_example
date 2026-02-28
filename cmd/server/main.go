@@ -41,8 +41,8 @@ func main() {
 
 	repo := repository.NewMongoSessionRepository(database, "sessions")
 
-	embedder := agent.NewEmbedder(client)
-	if err := embedder.Index(ctx, "../../docs"); err != nil {
+	embedder := agent.NewEmbedder()
+	if err := embedder.Index("../../docs"); err != nil {
 		log.Fatal(err)
 	}
 
