@@ -124,7 +124,7 @@
             roleLabel.className = "role";
             roleLabel.textContent = role === "user" ? "You" : role === "model" ? "Model" : "Function";
             div.appendChild(roleLabel);
-            if (role === "model") {
+            if (role === "model" && content) {
                 const body = document.createElement("div");
                 body.innerHTML = marked.parse(content);
                 div.appendChild(body);
@@ -171,19 +171,8 @@
                     appendMessage("model", "Error: " + text);
                     return;
                 }
-                const data = await res.json();
-                data.forEach(e => {      
-                    e.parts.forEach(part => {
-                        if (part){
-                            if (part.text) {
-                                appendMessage(e.role, part.text);
-                            }
-                            if (part.function_call) {
-                                appendMessage(e.role, part.function_call);
-                            }
-                        }
-                    });              
-                });
+                const events = await res.json();
+                setEvents(events);
             } catch (err) {
                 removeTyping();
                 appendMessage("model", "Error: " + err.message);
@@ -191,6 +180,26 @@
                 sendBtn.disabled = false;
                 promptEl.focus();
             }
+        }
+
+        function setEvents(events) {
+            removeTyping();
+            if (!events || events.length === 0) {
+                return;
+            }
+
+            events.forEach(e => {      
+                e.parts.forEach(part => {
+                    if (part){
+                        if (part.text) {
+                            appendMessage(e.role, part.text);
+                        }
+                        if (part.function_call) {
+                            appendMessage(e.role, part.function_call.name);
+                        }
+                    }
+                });              
+            });
         }
 
         async function loadSession() {
@@ -204,13 +213,11 @@
                     appendMessage("model", "Failed to load session.");
                     return;
                 }
-                const msgs = await res.json();
-                if (!msgs || msgs.length === 0) {
+                const events = await res.json();
+                if (!events || events.length === 0) {
                     return;
                 }
-                for (const msg of msgs) {
-                    appendMessage(msg.role, msg.content);
-                }
+                setEvents(events);
             } catch (err) {
                 appendMessage("model", "Error loading session: " + err.message);
             }
