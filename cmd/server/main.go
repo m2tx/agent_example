@@ -8,10 +8,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/m2tx/agent_example/assets"
 	"github.com/m2tx/agent_example/internal/agent"
 	"github.com/m2tx/agent_example/internal/functions"
+	agentmcp "github.com/m2tx/agent_example/internal/mcp"
 	"github.com/m2tx/agent_example/internal/repository"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -48,6 +50,18 @@ func main() {
 	}
 
 	a := agent.NewWithRepo(client, getModel(), assets.SystemInstruction, repo)
+
+	if mcpDecls, err := loadMCPTools(ctx); err != nil {
+		log.Printf("mcp: %v (skipping)", err)
+	} else {
+		for _, decl := range mcpDecls {
+			if err := a.AddFunctionCall(decl); err != nil {
+				log.Fatalf("mcp: register tool %q: %v", decl.Name, err)
+			}
+			log.Printf("mcp: registered tool %q", decl.Name)
+		}
+	}
+
 	err = a.AddFunctionCall(functions.CreateWeatherFunctionDeclaration())
 	if err != nil {
 		log.Fatal(err)
@@ -195,4 +209,46 @@ func getMongoDB() string {
 	}
 
 	return db
+}
+
+func getMcpServerCommand() string {
+	return os.Getenv("MCP_SERVER_COMMAND")
+}
+
+func getMcpServerURL() string {
+	return os.Getenv("MCP_SERVER_URL")
+}
+
+func getMcpServerEnv() []string {
+	env := os.Getenv("MCP_SERVER_ENV")
+	if env == "" {
+		return nil
+	}
+
+	return strings.Split(env, ",")
+}
+
+// loadMCPTools connects to an MCP server (if configured) and returns its tools
+// as FunctionDeclarations. Configure via MCP_SERVER_COMMAND (stdio) or
+// MCP_SERVER_URL (HTTP streamable). Returns nil tools without error when
+// neither variable is set.
+//
+// MCP_SERVER_ENV accepts a comma-separated list of KEY=VALUE pairs that are
+// injected into the server process environment, e.g.:
+//
+//	MCP_SERVER_ENV=API_KEY=secret,DEBUG=1
+func loadMCPTools(ctx context.Context) ([]*agent.FunctionDeclaration, error) {
+	command := getMcpServerCommand()
+	endpoint := getMcpServerURL()
+	if command == "" && endpoint == "" {
+		return nil, nil
+	}
+
+	client, err := agentmcp.NewClient(ctx, command, endpoint, getMcpServerEnv())
+	if err != nil {
+		return nil, err
+	}
+	// client stays alive for the duration of the process
+
+	return client.ListTools(ctx)
 }
