@@ -61,11 +61,16 @@ The project implements an **agentic system with automatic function calling**. He
   - Contains the actual implementation function (`FunctionCall`)
   - Follows the JSON schema pattern that Gemini understands
 
+- **`mcp.Client`** (`internal/mcp/mcp.go`): MCP client for dynamic tool registration
+  - Connects to an MCP server via HTTP streamable transport (`MCP_SERVER_URL`, default `http://localhost:9000`)
+  - `NewClient(ctx, endpoint)` establishes the session; `RegisterTools(ctx, registry)` fetches and registers all server tools
+  - MCP server is a **required** dependency — the server will fatal on startup if it cannot connect
+
 - **Server** (`cmd/server/main.go`): REST API server
   - Routes: `/` (UI), `/prompt` (POST to chat), `/history` (GET/DELETE session)
   - Loads system instruction from embedded assets (`assets/system_instruction.txt`)
   - Initializes `Embedder` and indexes `docs/` directory at startup
-  - Initializes agent with registered functions: `get_weather`, `get_companies`, `get_collaborators`, `search_docs`
+  - Connects to MCP server and registers its tools, then registers built-in functions: `get_weather`, `get_companies`, `get_collaborators`, `search_docs`
 
 ### Function Declaration Pattern
 
@@ -96,6 +101,7 @@ Environment variables:
 - `HTTP_PORT`: Server port (default: `8080`)
 - `MONGODB_URI`: MongoDB connection URI (default: `mongodb://localhost:27017`)
 - `MONGODB_DB`: MongoDB database name (default: `agent_sessions`)
+- `MCP_SERVER_URL`: MCP server URL using HTTP streamable transport (default: `http://localhost:9000`). Required — server will not start if unreachable.
 
 ## Important Implementation Details
 
