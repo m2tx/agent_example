@@ -12,6 +12,7 @@ import (
 	"github.com/m2tx/agent_example/assets"
 	"github.com/m2tx/agent_example/internal/agent"
 	"github.com/m2tx/agent_example/internal/functions"
+	"github.com/m2tx/agent_example/internal/mcp"
 	"github.com/m2tx/agent_example/internal/repository"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -48,6 +49,17 @@ func main() {
 	}
 
 	a := agent.NewWithRepo(client, getModel(), assets.SystemInstruction, repo)
+
+	mcpClient, err := mcp.NewClient(ctx, getMcpServerURL())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = mcpClient.RegisterTools(ctx, a)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	err = a.AddFunctionCall(functions.CreateWeatherFunctionDeclaration())
 	if err != nil {
 		log.Fatal(err)
@@ -195,4 +207,13 @@ func getMongoDB() string {
 	}
 
 	return db
+}
+
+func getMcpServerURL() string {
+	uri := os.Getenv("MCP_SERVER_URL")
+	if uri == "" {
+		return "http://localhost:9000"
+	}
+
+	return uri
 }

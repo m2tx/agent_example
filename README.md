@@ -10,6 +10,7 @@ A Go-based agentic system powered by Google's Gemini API with function calling, 
   - `get_companies` - List accessible companies
   - `get_collaborators` - Retrieve employee/collaborator information for a company
   - `search_docs` - Semantic search over indexed documentation using embeddings
+- **MCP Integration**: Dynamically registers tools from an external MCP server via HTTP (streamable transport)
 - **Document Indexing**: Automatically indexes a docs directory at startup using Gemini embeddings
 - **Session Persistence**: Conversation history stored in MongoDB per session
 - **REST API**:
@@ -17,7 +18,7 @@ A Go-based agentic system powered by Google's Gemini API with function calling, 
   - `POST /prompt` - Send a prompt and get a response
   - `GET /history?session_id=<id>` - Retrieve session conversation history
   - `DELETE /history?session_id=<id>` - Clear a session
-- **Configurable**: Environment variables for model selection, HTTP port, and MongoDB connection
+- **Configurable**: Environment variables for model selection, HTTP port, MongoDB connection, and MCP server URL
 
 ## Architecture
 
@@ -30,6 +31,8 @@ internal/functions/
   weather.go                    # Weather function declaration
   company.go                    # Company and collaborator function declarations
   docs.go                       # Docs semantic search function declaration
+internal/mcp/
+  mcp.go                        # MCP client: connects to MCP server and registers tools
 internal/model/content.go       # Content/Part types for serializable history
 internal/repository/
   repository.go                 # SessionRepository interface
@@ -62,6 +65,7 @@ docs/                           # Documents indexed at startup for search_docs t
 - Go 1.21+
 - MongoDB instance
 - Gemini API key — set `GEMINI_API_KEY` environment variable
+- MCP server running and accessible (default: `http://localhost:9000`)
 
 ### Installation
 
@@ -73,11 +77,11 @@ go mod vendor
 ### Running
 
 ```bash
-# Default: port 8080, gemini-2.5-flash, MongoDB at localhost:27017
+# Default: port 8080, gemini-2.5-flash, MongoDB at localhost:27017, MCP at localhost:9000
 GEMINI_API_KEY=your-api-key go run ./cmd/server
 
 # Custom configuration
-GEMINI_API_KEY=your-api-key HTTP_PORT=8081 MODEL=gemini-2.5-pro MONGODB_URI=mongodb://host:27017 go run ./cmd/server
+GEMINI_API_KEY=your-api-key HTTP_PORT=8081 MODEL=gemini-2.5-pro MONGODB_URI=mongodb://host:27017 MCP_SERVER_URL=http://mcp-host:9000 go run ./cmd/server
 
 # Build a binary
 go build -o agent ./cmd/server
@@ -108,10 +112,11 @@ curl -X DELETE http://localhost:8080/history?session_id=user-123
 
 ## Configuration
 
-| Variable       | Default                     | Description                        |
-|----------------|-----------------------------|------------------------------------|
-| `GEMINI_API_KEY` | *(required)*              | Google API key for Gemini access   |
-| `MODEL`        | `gemini-2.5-flash`          | Gemini model to use                |
-| `HTTP_PORT`    | `8080`                      | HTTP server port                   |
-| `MONGODB_URI`  | `mongodb://localhost:27017` | MongoDB connection URI             |
-| `MONGODB_DB`   | `agent_sessions`            | MongoDB database name              |
+| Variable         | Default                     | Description                                  |
+|------------------|-----------------------------|----------------------------------------------|
+| `GEMINI_API_KEY` | *(required)*                | Google API key for Gemini access             |
+| `MODEL`          | `gemini-2.5-flash`          | Gemini model to use                          |
+| `HTTP_PORT`      | `8080`                      | HTTP server port                             |
+| `MONGODB_URI`    | `mongodb://localhost:27017` | MongoDB connection URI                       |
+| `MONGODB_DB`     | `agent_sessions`            | MongoDB database name                        |
+| `MCP_SERVER_URL` | `http://localhost:9000`     | MCP server URL (HTTP streamable transport)   |
