@@ -132,13 +132,13 @@ func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]mo
 	return parseContents(contents)
 }
 
-func (a *Agent) SendStream(ctx context.Context, sessionID string, prompt string, onText func(string) error) error {
+func (a *Agent) SendStream(ctx context.Context, sessionID string, prompt string, onText func(string) error, onFunctionCall func(name string, args map[string]any) error) error {
 	chat, err := a.getChat(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 
-	err = a.processResponseStream(ctx, chat, onText, func() iter.Seq2[*genai.GenerateContentResponse, error] {
+	err = a.processResponseStream(ctx, chat, onText, onFunctionCall, func() iter.Seq2[*genai.GenerateContentResponse, error] {
 		return chat.SendMessageStream(ctx, genai.Part{Text: prompt})
 	})
 	if err != nil {
@@ -154,7 +154,7 @@ func (a *Agent) SendStream(ctx context.Context, sessionID string, prompt string,
 	return nil
 }
 
-func (a *Agent) processResponseStream(ctx context.Context, chat *genai.Chat, onText func(string) error, streamFn func() iter.Seq2[*genai.GenerateContentResponse, error]) error {
+func (a *Agent) processResponseStream(ctx context.Context, chat *genai.Chat, onText func(string) error, onFunctionCall func(name string, args map[string]any) error, streamFn func() iter.Seq2[*genai.GenerateContentResponse, error]) error {
 	var functionResponses []genai.Part
 
 	for resp, err := range streamFn() {
@@ -175,6 +175,12 @@ func (a *Agent) processResponseStream(ctx context.Context, chat *genai.Chat, onT
 				}
 
 				if part.FunctionCall != nil {
+					if onFunctionCall != nil {
+						if err := onFunctionCall(part.FunctionCall.Name, part.FunctionCall.Args); err != nil {
+							return err
+						}
+					}
+
 					funcResp, err := a.handleFunctionCall(ctx, part.FunctionCall.Name, part.FunctionCall.Args)
 					if err != nil {
 						return err
@@ -193,7 +199,7 @@ func (a *Agent) processResponseStream(ctx context.Context, chat *genai.Chat, onT
 	}
 
 	if len(functionResponses) > 0 {
-		return a.processResponseStream(ctx, chat, onText, func() iter.Seq2[*genai.GenerateContentResponse, error] {
+		return a.processResponseStream(ctx, chat, onText, onFunctionCall, func() iter.Seq2[*genai.GenerateContentResponse, error] {
 			return chat.SendMessageStream(ctx, functionResponses...)
 		})
 	}

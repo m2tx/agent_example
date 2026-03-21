@@ -146,6 +146,9 @@ func main() {
 		err := a.SendStream(r.Context(), req.SessionID, req.Prompt, func(text string) error {
 			writeEvent("text", text)
 			return nil
+		}, func(name string, args map[string]any) error {
+			writeEvent("function_call", name)
+			return nil
 		})
 		if err != nil {
 			writeEvent("error", err.Error())

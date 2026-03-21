@@ -40,6 +40,8 @@
         .msg.model th { background: #f4f4f4; font-weight: 600; }
         .msg.model hr { border: none; border-top: 1px solid #eee; margin: 8px 0; }
         .msg .role { font-size: 11px; font-weight: 600; color: #888; margin-bottom: 2px; }
+        .msg.function { align-self: flex-start; background: #f0f4ff; border: 1px solid #c7d3f5; border-radius: 8px; font-size: 13px; color: #3a5bc7; font-family: monospace; max-width: 70%; }
+        .msg.function .role { color: #3a5bc7; }
         .typing { align-self: flex-start; background: #fff; padding: 10px 14px; border-radius: 10px; border-bottom-left-radius: 2px; box-shadow: 0 1px 1px rgba(0,0,0,.1); font-size: 14px; color: #999; display: flex; align-items: center; gap: 4px; }
         .typing-dot { width: 8px; height: 8px; border-radius: 50%; background: #999; animation: typing-bounce 1.2s infinite ease-in-out; }
         .typing-dot:nth-child(1) { animation-delay: 0s; }
@@ -168,7 +170,11 @@
                         if (!part.startsWith("data: ")) continue;
                         const data = JSON.parse(part.slice(6));
 
-                        if (data.type === "text") {
+                        if (data.type === "function_call") {
+                            removeTyping();
+                            appendMessage("function", "⚙ " + data.content + "()");
+                            showTyping();
+                        } else if (data.type === "text") {
                             if (!msgDiv) {
                                 removeTyping();
                                 msgDiv = document.createElement("div");
