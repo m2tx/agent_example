@@ -3,8 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/m2tx/agent_example/internal/agent"
@@ -21,25 +19,12 @@ type Client struct {
 	session *mcp.ClientSession
 }
 
-// NewClient creates and connects an MCP client using either a stdio command or an HTTP endpoint.
-// Exactly one of command or endpoint must be non-empty.
-// env is an optional list of "KEY=VALUE" strings injected into the server process environment
-// (merged on top of the current process environment). Ignored for HTTP transports.
-func NewClient(ctx context.Context, command, endpoint string, env []string) (*Client, error) {
-	var transport mcp.Transport
-	switch {
-	case command != "":
-		parts := strings.Fields(command)
-		cmd := exec.Command(parts[0], parts[1:]...)
-		if len(env) > 0 {
-			cmd.Env = append(os.Environ(), env...)
-		}
-		transport = &mcp.CommandTransport{Command: cmd}
-	case endpoint != "":
-		transport = &mcp.StreamableClientTransport{Endpoint: endpoint}
-	default:
-		return nil, fmt.Errorf("mcp: either command or endpoint must be set")
+// NewClient creates and connects an MCP client using an HTTP endpoint.
+func NewClient(ctx context.Context, endpoint string) (*Client, error) {
+	if endpoint == "" {
+		return nil, fmt.Errorf("mcp: endpoint must be set")
 	}
+	transport := &mcp.StreamableClientTransport{Endpoint: endpoint}
 
 	c := mcp.NewClient(&mcp.Implementation{Name: "agent_example", Version: "1.0.0"}, nil)
 	session, err := c.Connect(ctx, transport, nil)
