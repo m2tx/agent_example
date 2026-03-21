@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"iter"
 
 	"github.com/m2tx/agent_example/internal/model"
 	"github.com/m2tx/agent_example/internal/repository"
@@ -129,6 +130,75 @@ func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]mo
 	}
 
 	return parseContents(contents)
+}
+
+func (a *Agent) SendStream(ctx context.Context, sessionID string, prompt string, onText func(string) error) error {
+	chat, err := a.getChat(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+
+	err = a.processResponseStream(ctx, chat, onText, func() iter.Seq2[*genai.GenerateContentResponse, error] {
+		return chat.SendMessageStream(ctx, genai.Part{Text: prompt})
+	})
+	if err != nil {
+		return err
+	}
+
+	if a.sessionRepository != nil {
+		if saveErr := a.sessionRepository.Save(ctx, sessionID, toModelContents(chat.History(true))); saveErr != nil {
+			fmt.Printf("agent: warning: failed to save session %q: %v\n", sessionID, saveErr)
+		}
+	}
+
+	return nil
+}
+
+func (a *Agent) processResponseStream(ctx context.Context, chat *genai.Chat, onText func(string) error, streamFn func() iter.Seq2[*genai.GenerateContentResponse, error]) error {
+	var functionResponses []genai.Part
+
+	for resp, err := range streamFn() {
+		if err != nil {
+			return err
+		}
+
+		for _, candidate := range resp.Candidates {
+			if candidate == nil || candidate.Content == nil {
+				continue
+			}
+
+			for _, part := range candidate.Content.Parts {
+				if part.Text != "" {
+					if err := onText(part.Text); err != nil {
+						return err
+					}
+				}
+
+				if part.FunctionCall != nil {
+					funcResp, err := a.handleFunctionCall(ctx, part.FunctionCall.Name, part.FunctionCall.Args)
+					if err != nil {
+						return err
+					}
+
+					functionResponses = append(functionResponses, genai.Part{
+						FunctionResponse: &genai.FunctionResponse{
+							ID:       part.FunctionCall.ID,
+							Name:     part.FunctionCall.Name,
+							Response: funcResp,
+						},
+					})
+				}
+			}
+		}
+	}
+
+	if len(functionResponses) > 0 {
+		return a.processResponseStream(ctx, chat, onText, func() iter.Seq2[*genai.GenerateContentResponse, error] {
+			return chat.SendMessageStream(ctx, functionResponses...)
+		})
+	}
+
+	return nil
 }
 
 func (a *Agent) ClearSession(ctx context.Context, sessionID string) {

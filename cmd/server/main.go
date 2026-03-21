@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -126,16 +127,32 @@ func main() {
 			return
 		}
 
-		resp, err := a.Send(r.Context(), req.SessionID, req.Prompt)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming not supported", http.StatusInternalServerError)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
 
-		json.NewEncoder(w).Encode(resp)
+		writeEvent := func(eventType, content string) {
+			data, _ := json.Marshal(map[string]string{"type": eventType, "content": content})
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+
+		err := a.SendStream(r.Context(), req.SessionID, req.Prompt, func(text string) error {
+			writeEvent("text", text)
+			return nil
+		})
+		if err != nil {
+			writeEvent("error", err.Error())
+			return
+		}
+
+		writeEvent("done", "")
 	})
 
 	log.Fatal(http.ListenAndServe(":"+getHttpPort(), nil))

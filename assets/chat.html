@@ -132,20 +132,64 @@
             sendBtn.disabled = true;
             showTyping();
 
+            let msgDiv = null;
+            let msgBody = null;
+            let accumulatedText = "";
+
             try {
                 const res = await fetch("/prompt", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ session_id: sessionId, prompt: prompt })
                 });
-                removeTyping();
+
                 if (!res.ok) {
+                    removeTyping();
                     const text = await res.text();
                     appendMessage("model", "Error: " + text);
                     return;
                 }
-                const events = await res.json();
-                setEvents(events);
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const parts = buffer.split("\n\n");
+                    buffer = parts.pop();
+
+                    for (const part of parts) {
+                        if (!part.startsWith("data: ")) continue;
+                        const data = JSON.parse(part.slice(6));
+
+                        if (data.type === "text") {
+                            if (!msgDiv) {
+                                removeTyping();
+                                msgDiv = document.createElement("div");
+                                msgDiv.className = "msg model";
+                                const roleLabel = document.createElement("div");
+                                roleLabel.className = "role";
+                                roleLabel.textContent = "Model";
+                                msgDiv.appendChild(roleLabel);
+                                msgBody = document.createElement("div");
+                                msgDiv.appendChild(msgBody);
+                                messagesEl.appendChild(msgDiv);
+                            }
+                            accumulatedText += data.content;
+                            msgBody.innerHTML = marked.parse(accumulatedText);
+                            messagesEl.scrollTop = messagesEl.scrollHeight;
+                        } else if (data.type === "error") {
+                            removeTyping();
+                            appendMessage("model", "Error: " + data.content);
+                        } else if (data.type === "done") {
+                            removeTyping();
+                        }
+                    }
+                }
             } catch (err) {
                 removeTyping();
                 appendMessage("model", "Error: " + err.message);
@@ -156,22 +200,14 @@
         }
 
         function setEvents(events) {
-            removeTyping();
-            if (!events || events.length === 0) {
-                return;
-            }
-
-            events.forEach(e => {      
+            if (!events || events.length === 0) return;
+            events.forEach(e => {
                 e.parts.forEach(part => {
-                    if (part){
-                        if (part.text) {
-                            appendMessage(e.role, part.text);
-                        }
-                        if (part.function_call) {
-                            appendMessage(e.role, part.function_call.name);
-                        }
+                    if (part) {
+                        if (part.text) appendMessage(e.role, part.text);
+                        if (part.function_call) appendMessage(e.role, part.function_call.name);
                     }
-                });              
+                });
             });
         }
 
