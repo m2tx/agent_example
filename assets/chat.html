@@ -97,15 +97,16 @@
             roleLabel.className = "role";
             roleLabel.textContent = role === "user" ? "You" : role === "model" ? "Model" : "Function";
             div.appendChild(roleLabel);
+            const body = document.createElement("div");
             if (role === "model" && content) {
-                const body = document.createElement("div");
                 body.innerHTML = marked.parse(content);
-                div.appendChild(body);
             } else {
-                div.appendChild(document.createTextNode(content));
+                body.textContent = content;
             }
+            div.appendChild(body);
             messagesEl.appendChild(div);
             messagesEl.scrollTop = messagesEl.scrollHeight;
+            return body;
         }
 
         function showTyping() {
@@ -136,7 +137,6 @@
             sendBtn.disabled = true;
             showTyping();
 
-            let msgDiv = null;
             let msgBody = null;
             let accumulatedText = "";
 
@@ -144,7 +144,10 @@
                 const res = await fetch("/prompt", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ session_id: sessionId, prompt: prompt })
+                    body: JSON.stringify({ 
+                        session_id: sessionId,
+                        prompt: prompt
+                    })
                 });
 
                 if (!res.ok) {
@@ -171,22 +174,18 @@
                         const data = JSON.parse(part.slice(6));
 
                         if (data.type === "function_call") {
+                            msgBody = null;
+                            accumulatedText = "";
+                            
                             removeTyping();
                             appendMessage("function", "⚙ " + data.content + "()");
                             showTyping();
                         } else if (data.type === "text") {
-                            if (!msgDiv) {
+                            if (!msgBody) {
                                 removeTyping();
-                                msgDiv = document.createElement("div");
-                                msgDiv.className = "msg model";
-                                const roleLabel = document.createElement("div");
-                                roleLabel.className = "role";
-                                roleLabel.textContent = "Model";
-                                msgDiv.appendChild(roleLabel);
-                                msgBody = document.createElement("div");
-                                msgDiv.appendChild(msgBody);
-                                messagesEl.appendChild(msgDiv);
+                                msgBody = appendMessage("model", "");
                             }
+
                             accumulatedText += data.content;
                             msgBody.innerHTML = marked.parse(accumulatedText);
                             messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -209,14 +208,33 @@
 
         function setEvents(events) {
             if (!events || events.length === 0) return;
-            events.forEach(e => {
-                e.parts.forEach(part => {
-                    if (part) {
-                        if (part.text) appendMessage(e.role, part.text);
-                        if (part.function_call) appendMessage(e.role, part.function_call.name);
+            let texts = [];
+            let currentRole = null;
+            for (const e of events) {
+                if (e.role !== currentRole) {
+                    if (texts.length > 0) {
+                        appendMessage(currentRole, texts.join(""));
+                        texts = [];
                     }
-                });
-            });
+                }
+
+                currentRole = e.role;
+                for (const part of e.parts) {
+                    if (part.function_call) {
+                        if (texts.length > 0) {
+                            appendMessage(e.role, texts.join(""));
+                            texts = [];
+                        }
+                        appendMessage("function", "⚙ " + part.function_call.name + "()");
+                    } else if (part.text) {
+                        texts.push(part.text);
+                    }
+                }               
+            }  
+            if (texts.length > 0) {
+                appendMessage(currentRole, texts.join(""));
+                texts = [];
+            }         
         }
 
         async function loadSession() {
