@@ -50,7 +50,7 @@ func main() {
 
 	a := agent.NewWithRepo(client, getModel(), assets.SystemInstruction, repo)
 
-	mcpClient, err := mcp.NewClient(ctx, getMcpServerURL())
+	mcpClient, err := mcp.NewClient(ctx, getMcpServerURL(), getMcpTransport())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -221,4 +221,8 @@ func getMcpServerURL() string {
 	}
 
 	return uri
+}
+
+func getMcpTransport() string {
+	return os.Getenv("MCP_TRANSPORT")
 }

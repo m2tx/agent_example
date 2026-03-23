@@ -20,11 +20,19 @@ type Client struct {
 }
 
 // NewClient creates and connects an MCP client using an HTTP endpoint.
-func NewClient(ctx context.Context, endpoint string) (*Client, error) {
+// The transportType selects the transport: "streamable" or "sse" (default).
+func NewClient(ctx context.Context, endpoint, transportType string) (*Client, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("mcp: endpoint must be set")
 	}
-	transport := &mcp.StreamableClientTransport{Endpoint: endpoint}
+
+	var transport mcp.Transport
+	switch transportType {
+	case "streamable":
+		transport = &mcp.StreamableClientTransport{Endpoint: endpoint}
+	default:
+		transport = &mcp.SSEClientTransport{Endpoint: endpoint}
+	}
 
 	c := mcp.NewClient(&mcp.Implementation{Name: "agent_example", Version: "1.0.0"}, nil)
 	session, err := c.Connect(ctx, transport, nil)
