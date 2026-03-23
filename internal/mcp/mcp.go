@@ -54,10 +54,14 @@ func (c *Client) ListTools(ctx context.Context) ([]*agent.FunctionDeclaration, e
 			Description:      tool.Description,
 			ParametersSchema: tool.InputSchema,
 			FunctionCall: func(ctx context.Context, args map[string]any) (map[string]any, error) {
-				res, err := c.session.CallTool(ctx, &mcp.CallToolParams{
+				params := &mcp.CallToolParams{
 					Name:      tool.Name,
 					Arguments: args,
-				})
+				}
+				if sessionID, ok := agent.SessionIDFromContext(ctx); ok {
+					params.Meta = mcp.Meta{"session_id": sessionID}
+				}
+				res, err := c.session.CallTool(ctx, params)
 				if err != nil {
 					return nil, fmt.Errorf("mcp call %s: %w", tool.Name, err)
 				}

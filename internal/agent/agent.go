@@ -10,6 +10,21 @@ import (
 	"google.golang.org/genai"
 )
 
+type contextKey int
+
+const sessionIDKey contextKey = iota
+
+// WithSessionID returns a context carrying the given session ID.
+func WithSessionID(ctx context.Context, sessionID string) context.Context {
+	return context.WithValue(ctx, sessionIDKey, sessionID)
+}
+
+// SessionIDFromContext extracts the session ID stored by WithSessionID.
+func SessionIDFromContext(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(sessionIDKey).(string)
+	return v, ok
+}
+
 type Agent struct {
 	client            *genai.Client
 	model             string
@@ -106,6 +121,7 @@ func (a *Agent) getChat(ctx context.Context, sessionID string) (*genai.Chat, err
 }
 
 func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]model.Content, error) {
+	ctx = WithSessionID(ctx, sessionID)
 	chat, err := a.getChat(ctx, sessionID)
 	if err != nil {
 		return nil, err
@@ -133,6 +149,7 @@ func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]mo
 }
 
 func (a *Agent) SendStream(ctx context.Context, sessionID string, prompt string, onText func(string) error, onFunctionCall func(name string, args map[string]any) error) error {
+	ctx = WithSessionID(ctx, sessionID)
 	chat, err := a.getChat(ctx, sessionID)
 	if err != nil {
 		return err
