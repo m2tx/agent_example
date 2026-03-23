@@ -223,6 +223,6 @@ func getMcpServerURL() string {
 	return uri
 }
 
-func getMcpTransport() string {
-	return os.Getenv("MCP_TRANSPORT")
+func getMcpTransport() mcp.TransportType {
+	return mcp.TransportType(os.Getenv("MCP_TRANSPORT"))
 }

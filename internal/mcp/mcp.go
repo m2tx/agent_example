@@ -9,6 +9,13 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type TransportType string
+
+const (
+	TransportSSE        TransportType = "sse"
+	TransportStreamable TransportType = "streamable"
+)
+
 // ToolRegistry is implemented by any type that can accept tool registrations.
 type ToolRegistry interface {
 	AddFunctionCall(*agent.FunctionDeclaration) error
@@ -21,21 +28,21 @@ type Client struct {
 
 // NewClient creates and connects an MCP client using an HTTP endpoint.
 // The transportType selects the transport: "streamable" or "sse" (default).
-func NewClient(ctx context.Context, endpoint, transportType string) (*Client, error) {
+func NewClient(ctx context.Context, endpoint string, transportType TransportType) (*Client, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("mcp: endpoint must be set")
 	}
 
 	var transport mcp.Transport
 	switch transportType {
-	case "streamable":
+	case TransportStreamable:
 		transport = &mcp.StreamableClientTransport{Endpoint: endpoint}
 	default:
 		transport = &mcp.SSEClientTransport{Endpoint: endpoint}
 	}
 
 	c := mcp.NewClient(&mcp.Implementation{Name: "agent_example", Version: "1.0.0"}, nil)
-	session, err := c.Connect(ctx, transport, nil)
+	session, err := c.Connect(ctx, transport, &mcp.ClientSessionOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("mcp connect: %w", err)
 	}
