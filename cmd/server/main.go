@@ -60,6 +60,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	err = mcpClient.RegisterPrompts(ctx, a)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	err = a.AddFunctionCall(functions.CreateWeatherFunctionDeclaration())
 	if err != nil {
 		log.Fatal(err)
