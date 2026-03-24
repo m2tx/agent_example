@@ -35,10 +35,10 @@ func NewClient(ctx context.Context, endpoint string, transportType TransportType
 
 	var transport mcp.Transport
 	switch transportType {
-	case TransportStreamable:
-		transport = &mcp.StreamableClientTransport{Endpoint: endpoint}
-	default:
+	case TransportSSE:
 		transport = &mcp.SSEClientTransport{Endpoint: endpoint}
+	default:
+		transport = &mcp.StreamableClientTransport{Endpoint: endpoint}
 	}
 
 	c := mcp.NewClient(&mcp.Implementation{Name: "agent_example", Version: "1.0.0"}, nil)
