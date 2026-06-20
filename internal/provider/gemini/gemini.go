@@ -47,7 +47,7 @@ func (p *Provider) Send(ctx context.Context, req agent.ProviderRequest) ([]model
 	return toModelContents(newGenAI), nil
 }
 
-func (p *Provider) SendStream(ctx context.Context, req agent.ProviderRequest, onText func(string) error, onFunctionCall func(name string, args map[string]any) error) ([]model.Content, error) {
+func (p *Provider) SendStream(ctx context.Context, req agent.ProviderRequest, onText func(string) error, onFunctionCall func(name string, args map[string]any) error, onTurnDone func() error) ([]model.Content, error) {
 	initialHistory := toGenAIContents(req.History)
 
 	chat, err := p.client.Chats.Create(ctx, p.model, &genai.GenerateContentConfig{
@@ -60,7 +60,7 @@ func (p *Provider) SendStream(ctx context.Context, req agent.ProviderRequest, on
 		return nil, err
 	}
 
-	err = processResponseStream(ctx, chat, onText, onFunctionCall, req.HandleFunctionCall, func() iter.Seq2[*genai.GenerateContentResponse, error] {
+	err = processResponseStream(ctx, chat, onText, onFunctionCall, onTurnDone, req.HandleFunctionCall, func() iter.Seq2[*genai.GenerateContentResponse, error] {
 		return chat.SendMessageStream(ctx, genai.Part{Text: req.Prompt})
 	})
 	if err != nil {
@@ -121,9 +121,10 @@ func processResponse(ctx context.Context, chat *genai.Chat, resp *genai.Generate
 	return nil
 }
 
-func processResponseStream(ctx context.Context, chat *genai.Chat, onText func(string) error, onFunctionCall func(name string, args map[string]any) error, handle func(ctx context.Context, name string, args map[string]any) (map[string]any, error), streamFn func() iter.Seq2[*genai.GenerateContentResponse, error]) error {
-	var functionResponses []genai.Part
+func processResponseStream(ctx context.Context, chat *genai.Chat, onText func(string) error, onFunctionCall func(name string, args map[string]any) error, onTurnDone func() error, handle func(ctx context.Context, name string, args map[string]any) (map[string]any, error), streamFn func() iter.Seq2[*genai.GenerateContentResponse, error]) error {
+	var pendingCalls []*genai.FunctionCall
 
+	// Phase 1: stream text and collect function calls (without notifying yet).
 	for resp, err := range streamFn() {
 		if err != nil {
 			return err
@@ -139,29 +140,42 @@ func processResponseStream(ctx context.Context, chat *genai.Chat, onText func(st
 					}
 				}
 				if part.FunctionCall != nil {
-					if onFunctionCall != nil {
-						if err := onFunctionCall(part.FunctionCall.Name, part.FunctionCall.Args); err != nil {
-							return err
-						}
-					}
-					funcResp, err := handle(ctx, part.FunctionCall.Name, part.FunctionCall.Args)
-					if err != nil {
-						return err
-					}
-					functionResponses = append(functionResponses, genai.Part{
-						FunctionResponse: &genai.FunctionResponse{
-							ID:       part.FunctionCall.ID,
-							Name:     part.FunctionCall.Name,
-							Response: funcResp,
-						},
-					})
+					pendingCalls = append(pendingCalls, part.FunctionCall)
 				}
 			}
 		}
 	}
 
+	// Phase 2: LLM turn is done — let the frontend remove the typing indicator.
+	if onTurnDone != nil {
+		if err := onTurnDone(); err != nil {
+			return err
+		}
+	}
+
+	// Phase 3: notify and execute function calls.
+	var functionResponses []genai.Part
+	for _, fc := range pendingCalls {
+		if onFunctionCall != nil {
+			if err := onFunctionCall(fc.Name, fc.Args); err != nil {
+				return err
+			}
+		}
+		funcResp, err := handle(ctx, fc.Name, fc.Args)
+		if err != nil {
+			return err
+		}
+		functionResponses = append(functionResponses, genai.Part{
+			FunctionResponse: &genai.FunctionResponse{
+				ID:       fc.ID,
+				Name:     fc.Name,
+				Response: funcResp,
+			},
+		})
+	}
+
 	if len(functionResponses) > 0 {
-		return processResponseStream(ctx, chat, onText, onFunctionCall, handle, func() iter.Seq2[*genai.GenerateContentResponse, error] {
+		return processResponseStream(ctx, chat, onText, onFunctionCall, onTurnDone, handle, func() iter.Seq2[*genai.GenerateContentResponse, error] {
 			return chat.SendMessageStream(ctx, functionResponses...)
 		})
 	}

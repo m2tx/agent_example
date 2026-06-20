@@ -176,19 +176,32 @@
                         if (data.type === "function_call") {
                             msgBody = null;
                             accumulatedText = "";
-                            
-                            removeTyping();
                             appendMessage("function", "⚙ " + data.content + "()");
                             showTyping();
                         } else if (data.type === "text") {
                             if (!msgBody) {
-                                removeTyping();
-                                msgBody = appendMessage("model", "");
+                                const div = document.createElement("div");
+                                div.className = "msg model";
+                                const roleLabel = document.createElement("div");
+                                roleLabel.className = "role";
+                                roleLabel.textContent = "Model";
+                                div.appendChild(roleLabel);
+                                const body = document.createElement("div");
+                                div.appendChild(body);
+                                const typingEl = document.getElementById("typing");
+                                if (typingEl) {
+                                    messagesEl.insertBefore(div, typingEl);
+                                } else {
+                                    messagesEl.appendChild(div);
+                                }
+                                messagesEl.scrollTop = messagesEl.scrollHeight;
+                                msgBody = body;
                             }
-
                             accumulatedText += data.content;
                             msgBody.innerHTML = marked.parse(accumulatedText);
                             messagesEl.scrollTop = messagesEl.scrollHeight;
+                        } else if (data.type === "turn_done") {
+                            removeTyping();
                         } else if (data.type === "error") {
                             removeTyping();
                             appendMessage("model", "Error: " + data.content);

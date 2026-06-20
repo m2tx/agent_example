@@ -166,6 +166,9 @@ func main() {
 		}, func(name string, args map[string]any) error {
 			writeEvent("function_call", name)
 			return nil
+		}, func() error {
+			writeEvent("turn_done", "")
+			return nil
 		})
 		if err != nil {
 			writeEvent("error", err.Error())

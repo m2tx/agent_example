@@ -68,7 +68,7 @@ func (p *Provider) Send(ctx context.Context, req agent.ProviderRequest) ([]model
 	return newContents, nil
 }
 
-func (p *Provider) SendStream(ctx context.Context, req agent.ProviderRequest, onText func(string) error, onFunctionCall func(name string, args map[string]any) error) ([]model.Content, error) {
+func (p *Provider) SendStream(ctx context.Context, req agent.ProviderRequest, onText func(string) error, onFunctionCall func(name string, args map[string]any) error, onTurnDone func() error) ([]model.Content, error) {
 	messages := historyToMessages(req.History)
 	tools := buildTools(req.Tools)
 
@@ -109,6 +109,13 @@ func (p *Provider) SendStream(ctx context.Context, req agent.ProviderRequest, on
 		}
 		if err := stream.Err(); err != nil {
 			return nil, err
+		}
+
+		// LLM turn is done — let the frontend remove the typing indicator.
+		if onTurnDone != nil {
+			if err := onTurnDone(); err != nil {
+				return nil, err
+			}
 		}
 
 		// notify about any function calls

@@ -127,7 +127,7 @@ func (a *Agent) Send(ctx context.Context, sessionID string, prompt string) ([]mo
 	return modelContents, nil
 }
 
-func (a *Agent) SendStream(ctx context.Context, sessionID string, prompt string, onText func(string) error, onFunctionCall func(name string, args map[string]any) error) error {
+func (a *Agent) SendStream(ctx context.Context, sessionID string, prompt string, onText func(string) error, onFunctionCall func(name string, args map[string]any) error, onTurnDone func() error) error {
 	ctx = WithSessionID(ctx, sessionID)
 
 	history, err := a.loadHistory(ctx, sessionID)
@@ -143,7 +143,7 @@ func (a *Agent) SendStream(ctx context.Context, sessionID string, prompt string,
 		Prompt:             prompt,
 	}
 
-	newContents, err := a.provider.SendStream(ctx, req, onText, onFunctionCall)
+	newContents, err := a.provider.SendStream(ctx, req, onText, onFunctionCall, onTurnDone)
 	if err != nil {
 		return err
 	}
