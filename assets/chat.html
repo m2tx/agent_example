@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Agent</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -417,63 +418,18 @@
       }
     });
 
-    // ── Markdown renderer (no dependencies) ──────────────────────
+    // ── Markdown renderer (marked.js) ────────────────────────────
+    (function setupMarked() {
+      const renderer = new marked.Renderer();
+      renderer.link = function({ href, title, text }) {
+        const t = title ? ` title="${title}"` : '';
+        return `<a href="${href}"${t} target="_blank" rel="noopener noreferrer">${text}</a>`;
+      };
+      marked.use({ renderer, gfm: true, breaks: true });
+    })();
+
     function renderMarkdown(text) {
-      let html = escapeHtml(text);
-
-      // Fenced code blocks
-      html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
-        `<pre><code>${code.trimEnd()}</code></pre>`
-      );
-
-      // Inline code
-      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-      // Bold & italic
-      html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-      html = html.replace(/___(.+?)___/g, '<strong><em>$1</em></strong>');
-      html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-      html = html.replace(/_(.+?)_/g, '<em>$1</em>');
-
-      // Headings
-      html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-      // Blockquote
-      html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-
-      // HR
-      html = html.replace(/^(---|\*\*\*|___)$/gm, '<hr>');
-
-      // Unordered list
-      html = html.replace(/(^[-*+] .+(\n|$))+/gm, (block) => {
-        const items = block.trim().split('\n').map(l => `<li>${l.replace(/^[-*+] /, '')}</li>`).join('');
-        return `<ul>${items}</ul>`;
-      });
-
-      // Ordered list
-      html = html.replace(/(^\d+\. .+(\n|$))+/gm, (block) => {
-        const items = block.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
-        return `<ol>${items}</ol>`;
-      });
-
-      // Links
-      html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-
-      // Paragraphs (blank-line separated blocks not already wrapped in block tags)
-      html = html.replace(/^(?!<[houpl]|<block|<pre|<hr)(.+)$/gm, (line) => {
-        if (line.trim() === '') return '';
-        return `<p>${line}</p>`;
-      });
-
-      // Collapse consecutive blank lines
-      html = html.replace(/\n{2,}/g, '\n');
-
-      return html;
+      return marked.parse(text);
     }
 
     function escapeHtml(str) {
