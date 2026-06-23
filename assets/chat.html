@@ -611,9 +611,13 @@
         const events = await res.json();
         if (!events || events.length === 0) { showEmpty(); return; }
 
+        let lastRole = null;
+
+        let texts = [];
         for (const ev of events) {
           const role = ev.role === 'user' ? 'user' : 'model';
-          let texts = [];
+          if (role !== lastRole && texts.length) { appendMessage(lastRole, texts.join('')); texts = []; }
+          lastRole = role;
           for (const part of ev.parts) {
             if (part.function_call) {
               if (texts.length) { appendMessage(role, texts.join('')); texts = []; }
@@ -622,8 +626,8 @@
               texts.push(part.text);
             }
           }
-          if (texts.length) appendMessage(role, texts.join(''));
         }
+        if (texts.length) appendMessage(lastRole, texts.join(''));
       } catch (err) {
         appendMessage('model', 'Erro ao carregar sessão: ' + err.message);
       }
