@@ -111,13 +111,6 @@ func (p *Provider) SendStream(ctx context.Context, req agent.ProviderRequest, on
 			return nil, err
 		}
 
-		// LLM turn is done — let the frontend remove the typing indicator.
-		if onTurnDone != nil {
-			if err := onTurnDone(); err != nil {
-				return nil, err
-			}
-		}
-
 		// notify about any function calls
 		if onFunctionCall != nil {
 			for _, block := range acc.Content {
@@ -143,6 +136,13 @@ func (p *Provider) SendStream(ctx context.Context, req agent.ProviderRequest, on
 		messages = append(messages, anthropic.NewAssistantMessage(responseToContentParams(&acc)...))
 		messages = append(messages, anthropic.NewUserMessage(toolResults...))
 		newContents = append(newContents, toolResultContent)
+	}
+
+	// LLM turn is done — let the frontend remove the typing indicator.
+	if onTurnDone != nil {
+		if err := onTurnDone(); err != nil {
+			return nil, err
+		}
 	}
 
 	return newContents, nil

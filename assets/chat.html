@@ -110,6 +110,7 @@
         }
 
         function showTyping() {
+            if (document.getElementById("typing")) return;
             const div = document.createElement("div");
             div.className = "typing";
             div.id = "typing";
@@ -123,8 +124,7 @@
         }
 
         function removeTyping() {
-            const el = document.getElementById("typing");
-            if (el) el.remove();
+            document.querySelectorAll(".typing").forEach(el => el.remove());
         }
 
         async function sendMessage() {
