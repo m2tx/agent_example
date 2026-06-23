@@ -3,6 +3,7 @@ package gemini
 import (
 	"context"
 	"iter"
+	"strings"
 
 	"github.com/m2tx/agent_example/internal/agent"
 	"github.com/m2tx/agent_example/internal/model"
@@ -78,11 +79,96 @@ func buildTools(fns map[string]*agent.FunctionDeclaration) []*genai.Tool {
 		decls = append(decls, &genai.FunctionDeclaration{
 			Name:                 fd.Name,
 			Description:          fd.Description,
-			ParametersJsonSchema: fd.ParametersSchema,
-			ResponseJsonSchema:   fd.ResponseSchema,
+			ParametersJsonSchema: resolveRefs(fd.ParametersSchema),
+			ResponseJsonSchema:   resolveRefs(fd.ResponseSchema),
 		})
 	}
 	return []*genai.Tool{{FunctionDeclarations: decls}}
+}
+
+// resolveRefs flattens JSON Schema $defs/$ref references that Gemini does not support.
+// It collects $defs from all nesting levels before resolving references.
+func resolveRefs(schema any) any {
+	m, ok := schema.(map[string]any)
+	if !ok {
+		return schema
+	}
+
+	defs := map[string]any{}
+	collectDefs(m, defs)
+
+	var resolve func(node any, visited map[string]bool) any
+	resolve = func(node any, visited map[string]bool) any {
+		nm, ok := node.(map[string]any)
+		if !ok {
+			return node
+		}
+
+		if ref, ok := nm["$ref"].(string); ok {
+			name := strings.TrimPrefix(ref, "#/$defs/")
+			if visited[name] {
+				return map[string]any{"type": "object"}
+			}
+			if def, found := defs[name]; found {
+				visited[name] = true
+				resolved := resolve(def, visited)
+				delete(visited, name)
+				return resolved
+			}
+			return nm
+		}
+
+		result := make(map[string]any, len(nm))
+		for k, v := range nm {
+			if k == "$defs" {
+				continue
+			}
+			switch vt := v.(type) {
+			case map[string]any:
+				result[k] = resolve(vt, visited)
+			case []any:
+				arr := make([]any, len(vt))
+				for i, item := range vt {
+					arr[i] = resolve(item, visited)
+				}
+				result[k] = arr
+			default:
+				result[k] = v
+			}
+		}
+		return result
+	}
+
+	return resolve(m, map[string]bool{})
+}
+
+// collectDefs recursively gathers all $defs entries from any level of the schema.
+// Outer definitions take precedence over inner ones with the same name.
+func collectDefs(node any, out map[string]any) {
+	m, ok := node.(map[string]any)
+	if !ok {
+		return
+	}
+	if defs, ok := m["$defs"].(map[string]any); ok {
+		for k, v := range defs {
+			if _, exists := out[k]; !exists {
+				out[k] = v
+			}
+		}
+	}
+	for k, v := range m {
+		if k == "$defs" {
+			continue
+		}
+		switch vt := v.(type) {
+		case map[string]any:
+			collectDefs(vt, out)
+		case []any:
+			for _, item := range vt {
+				collectDefs(item, out)
+			}
+		}
+	}
 }
 
 func processResponse(ctx context.Context, chat *genai.Chat, resp *genai.GenerateContentResponse, handle func(ctx context.Context, name string, args map[string]any) (map[string]any, error)) error {
