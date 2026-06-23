@@ -13,6 +13,8 @@ import (
 	"github.com/m2tx/agent_example/internal/agent"
 	"github.com/m2tx/agent_example/internal/functions"
 	"github.com/m2tx/agent_example/internal/mcp"
+	anthropicprovider "github.com/m2tx/agent_example/internal/provider/anthropic"
+	geminiprovider "github.com/m2tx/agent_example/internal/provider/gemini"
 	"github.com/m2tx/agent_example/internal/repository"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -21,13 +23,6 @@ import (
 
 func main() {
 	ctx := context.Background()
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		Backend:     genai.BackendGeminiAPI,
-		HTTPOptions: genai.HTTPOptions{APIVersion: "v1beta"},
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(getMongoURI()))
 	if err != nil {
@@ -48,7 +43,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	a := agent.NewWithRepo(client, getModel(), assets.SystemInstruction, repo)
+	provider, err := buildProvider(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	a := agent.NewWithRepo(provider, assets.SystemInstruction, repo)
 
 	mcpClient, err := mcp.NewClient(ctx, getMcpServerURL(), getMcpTransport())
 	if err != nil {
@@ -166,6 +166,9 @@ func main() {
 		}, func(name string, args map[string]any) error {
 			writeEvent("function_call", name)
 			return nil
+		}, func() error {
+			writeEvent("turn_done", "")
+			return nil
 		})
 		if err != nil {
 			writeEvent("error", err.Error())
@@ -178,13 +181,43 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+getHttpPort(), nil))
 }
 
+func buildProvider(ctx context.Context) (agent.LLMProvider, error) {
+	switch getProviderName() {
+	case "anthropic":
+		apiKey := os.Getenv("ANTHROPIC_API_KEY")
+		if apiKey == "" {
+			return nil, fmt.Errorf("ANTHROPIC_API_KEY is required when PROVIDER=anthropic")
+		}
+		return anthropicprovider.New(apiKey, getModel()), nil
+	default:
+		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+			Backend:     genai.BackendGeminiAPI,
+			HTTPOptions: genai.HTTPOptions{APIVersion: "v1beta"},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("gemini client: %w", err)
+		}
+		return geminiprovider.New(client, getModel()), nil
+	}
+}
+
+func getProviderName() string {
+	p := os.Getenv("PROVIDER")
+	if p == "" {
+		return "gemini"
+	}
+	return p
+}
+
 func getModel() string {
 	model := os.Getenv("MODEL")
-	if model == "" {
-		model = "gemini-2.5-flash"
+	if model != "" {
+		return model
 	}
-
-	return model
+	if getProviderName() == "anthropic" {
+		return "claude-opus-4-7"
+	}
+	return "gemini-2.5-flash"
 }
 
 func getHttpPort() string {

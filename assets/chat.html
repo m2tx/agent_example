@@ -1,268 +1,664 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Chat</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: #f0f2f5; height: 100vh; display: flex; }
-        /* Chat panel */
-        .chat-container { flex: 1; min-width: 400px; height: 100vh; display: flex; flex-direction: column; background: #f0f2f5; }
-        header { background: #075e54; color: #fff; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; }
-        header h1 { font-size: 18px; font-weight: 600; }
-        .session-bar { display: flex; align-items: center; gap: 8px; }
-        .session-bar label { font-size: 13px; }
-        .session-bar input { padding: 4px 8px; border: none; border-radius: 4px; font-size: 13px; width: 180px; }
-        .session-bar button { background: #25d366; color: #fff; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-        .session-bar button:hover { background: #1da851; }
-        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
-        .msg { max-width: 90%; padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; }
-        .msg.user { align-self: flex-end; background: #dcf8c6; border-bottom-right-radius: 2px; }
-        .msg.model { align-self: flex-start; background: #fff; border-bottom-left-radius: 2px; box-shadow: 0 1px 1px rgba(0,0,0,.1); white-space: normal; }
-        /* Markdown prose styles */
-        .msg.model p { margin: 0 0 8px; }
-        .msg.model p:last-child { margin-bottom: 0; }
-        .msg.model h1,.msg.model h2,.msg.model h3,.msg.model h4 { margin: 10px 0 4px; font-weight: 600; line-height: 1.3; }
-        .msg.model h1 { font-size: 1.2em; }
-        .msg.model h2 { font-size: 1.1em; }
-        .msg.model h3,.msg.model h4 { font-size: 1em; }
-        .msg.model ul,.msg.model ol { margin: 4px 0 8px 18px; }
-        .msg.model li { margin-bottom: 2px; }
-        .msg.model code { background: #f4f4f4; border-radius: 3px; padding: 1px 4px; font-family: monospace; font-size: 13px; }
-        .msg.model pre { background: #f4f4f4; border-radius: 6px; padding: 10px 12px; overflow-x: auto; margin: 6px 0; }
-        .msg.model pre code { background: none; padding: 0; font-size: 13px; }
-        .msg.model blockquote { border-left: 3px solid #ccc; margin: 6px 0; padding-left: 10px; color: #555; }
-        .msg.model a { color: #075e54; text-decoration: underline; }
-        .msg.model table { border-collapse: collapse; margin: 6px 0; font-size: 13px; }
-        .msg.model th,.msg.model td { border: 1px solid #ddd; padding: 4px 8px; }
-        .msg.model th { background: #f4f4f4; font-weight: 600; }
-        .msg.model hr { border: none; border-top: 1px solid #eee; margin: 8px 0; }
-        .msg .role { font-size: 11px; font-weight: 600; color: #888; margin-bottom: 2px; }
-        .msg.function { align-self: flex-start; background: #f0f4ff; border: 1px solid #c7d3f5; border-radius: 8px; font-size: 13px; color: #3a5bc7; font-family: monospace; max-width: 70%; }
-        .msg.function .role { color: #3a5bc7; }
-        .typing { align-self: flex-start; background: #fff; padding: 10px 14px; border-radius: 10px; border-bottom-left-radius: 2px; box-shadow: 0 1px 1px rgba(0,0,0,.1); font-size: 14px; color: #999; display: flex; align-items: center; gap: 4px; }
-        .typing-dot { width: 8px; height: 8px; border-radius: 50%; background: #999; animation: typing-bounce 1.2s infinite ease-in-out; }
-        .typing-dot:nth-child(1) { animation-delay: 0s; }
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typing-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-6px); opacity: 1; } }
-        @keyframes msg-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        .msg { animation: msg-in 0.2s ease-out; }
-        #input-area { background: #f0f2f5; padding: 12px 20px; display: flex; gap: 10px; border-top: 1px solid #ddd; }
-        #input-area input { flex: 1; padding: 10px 14px; border: 1px solid #ccc; border-radius: 20px; font-size: 14px; outline: none; }
-        #input-area input:focus { border-color: #075e54; }
-        #input-area button { background: #075e54; color: #fff; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-size: 14px; }
-        #input-area button:hover { background: #064e46; }
-        #input-area button:disabled { background: #999; cursor: not-allowed; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222538;
+      --border: #2e3148;
+      --accent: #7c6af7;
+      --accent-hover: #6a58e8;
+      --text: #e8e9f0;
+      --text-muted: #7a7f9a;
+      --user-bg: #2a2060;
+      --user-border: #4a38c0;
+      --fn-bg: #0d2030;
+      --fn-border: #1a4060;
+      --fn-text: #5bb8f5;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.3px;
+      flex: 1;
+    }
+
+    .session-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .session-controls label {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    #session {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: monospace;
+      width: 200px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #session:focus { border-color: var(--accent); }
+
+    .btn {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn:hover { background: var(--border); border-color: var(--accent); }
+
+    .btn-danger:hover { background: #3a1020; border-color: #c04060; color: #f08090; }
+
+    /* ── Messages ── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    #messages::-webkit-scrollbar { width: 6px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .msg-row {
+      display: flex;
+      animation: fade-in 0.2s ease-out;
+    }
+
+    .msg-row.user { justify-content: flex-end; }
+    .msg-row.model { justify-content: flex-start; }
+    .msg-row.function { justify-content: flex-start; }
+
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .bubble {
+      max-width: min(680px, 85%);
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+
+    .bubble.user {
+      background: var(--user-bg);
+      border: 1px solid var(--user-border);
+      border-bottom-right-radius: 3px;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+
+    .bubble.model {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 3px;
+    }
+
+    .bubble.function {
+      background: var(--fn-bg);
+      border: 1px solid var(--fn-border);
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      color: var(--fn-text);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .fn-icon {
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    /* ── Markdown styles (inside .bubble.model) ── */
+    .bubble.model p { margin: 0 0 10px; }
+    .bubble.model p:last-child { margin-bottom: 0; }
+    .bubble.model h1, .bubble.model h2, .bubble.model h3, .bubble.model h4 {
+      margin: 14px 0 6px;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--text);
+    }
+    .bubble.model h1 { font-size: 1.25em; }
+    .bubble.model h2 { font-size: 1.1em; }
+    .bubble.model h3, .bubble.model h4 { font-size: 1em; }
+    .bubble.model ul, .bubble.model ol { margin: 4px 0 10px 20px; }
+    .bubble.model li { margin-bottom: 3px; }
+    .bubble.model code {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 12.5px;
+      color: #c9a7f5;
+    }
+    .bubble.model pre {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      margin: 8px 0;
+    }
+    .bubble.model pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      color: #b0d8ff;
+      font-size: 13px;
+    }
+    .bubble.model blockquote {
+      border-left: 3px solid var(--accent);
+      padding-left: 12px;
+      margin: 6px 0;
+      color: var(--text-muted);
+    }
+    .bubble.model a { color: var(--accent); text-decoration: underline; }
+    .bubble.model table { border-collapse: collapse; margin: 8px 0; font-size: 13px; width: 100%; }
+    .bubble.model th, .bubble.model td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .bubble.model th { background: var(--surface2); font-weight: 600; }
+    .bubble.model hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+    .bubble.model strong { font-weight: 700; color: #d0c8ff; }
+    .bubble.model em { font-style: italic; color: #c8d8f0; }
+
+    /* ── Typing indicator ── */
+    .typing-bubble {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      border-bottom-left-radius: 3px;
+      padding: 14px 18px;
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: bounce 1.3s infinite ease-in-out;
+    }
+    .dot:nth-child(2) { animation-delay: 0.18s; }
+    .dot:nth-child(3) { animation-delay: 0.36s; }
+
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    /* ── Empty state ── */
+    .empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .empty-icon { font-size: 48px; opacity: 0.3; }
+    .empty p { font-size: 14px; }
+
+    /* ── Input area ── */
+    #input-area {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    #prompt {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      resize: none;
+      max-height: 180px;
+      overflow-y: auto;
+      line-height: 1.5;
+      transition: border-color 0.15s;
+    }
+
+    #prompt:focus { border-color: var(--accent); }
+    #prompt::placeholder { color: var(--text-muted); }
+
+    #send-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      flex-shrink: 0;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #send-btn:hover { background: var(--accent-hover); }
+    #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .send-icon { font-size: 16px; line-height: 1; }
+  </style>
 </head>
 <body>
-    <div class="chat-container">
-    <header>
-        <h1>AI Chat</h1>
-        <div class="session-bar">
-            <label for="session">Session:</label>
-            <input type="text" id="session" placeholder="Enter session ID">
-            <button onclick="loadSession()">Load</button>
-            <button onclick="newSession()">New</button>
-        </div>
-    </header>
-    <div id="messages"></div>
-    <div id="input-area">
-        <input type="text" id="prompt" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMessage()">
-        <button id="send-btn" onclick="sendMessage()">Send</button>
+
+  <header>
+    <h1>⚡ AI Agent</h1>
+    <div class="session-controls">
+      <label for="session">Sessão:</label>
+      <input type="text" id="session" placeholder="ID da sessão">
+      <button class="btn" onclick="loadSession()">Carregar</button>
+      <button class="btn" onclick="newSession()">Nova</button>
+      <button class="btn btn-danger" onclick="clearSession()">Limpar</button>
     </div>
+  </header>
+
+  <div id="messages">
+    <div class="empty" id="empty-state">
+      <div class="empty-icon">🤖</div>
+      <p>Inicie uma conversa ou carregue uma sessão existente.</p>
     </div>
+  </div>
 
-    <script>
-        const messagesEl = document.getElementById("messages");
-        const promptEl = document.getElementById("prompt");
-        const sendBtn = document.getElementById("send-btn");
-        const sessionEl = document.getElementById("session");
+  <div id="input-area">
+    <textarea
+      id="prompt"
+      rows="1"
+      placeholder="Digite uma mensagem… (Enter para enviar, Shift+Enter para nova linha)"
+    ></textarea>
+    <button id="send-btn" onclick="sendMessage()">
+      <span class="send-icon">▲</span> Enviar
+    </button>
+  </div>
 
-        function generateId() {
-            return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 10);
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const promptEl   = document.getElementById('prompt');
+    const sendBtn    = document.getElementById('send-btn');
+    const sessionEl  = document.getElementById('session');
+    const emptyEl    = document.getElementById('empty-state');
+
+    // ── Session init ──────────────────────────────────────────────
+    sessionEl.value = localStorage.getItem('agentSessionId') || generateId();
+    saveSessionId();
+
+    function generateId() {
+      return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+    }
+
+    function saveSessionId() {
+      localStorage.setItem('agentSessionId', sessionEl.value);
+    }
+
+    sessionEl.addEventListener('change', saveSessionId);
+
+    // ── Auto-resize textarea ──────────────────────────────────────
+    promptEl.addEventListener('input', () => {
+      promptEl.style.height = 'auto';
+      promptEl.style.height = promptEl.scrollHeight + 'px';
+    });
+
+    promptEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // ── Markdown renderer (no dependencies) ──────────────────────
+    function renderMarkdown(text) {
+      let html = escapeHtml(text);
+
+      // Fenced code blocks
+      html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
+        `<pre><code>${code.trimEnd()}</code></pre>`
+      );
+
+      // Inline code
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Bold & italic
+      html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      html = html.replace(/___(.+?)___/g, '<strong><em>$1</em></strong>');
+      html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+      html = html.replace(/_(.+?)_/g, '<em>$1</em>');
+
+      // Headings
+      html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+      // Blockquote
+      html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+      // HR
+      html = html.replace(/^(---|\*\*\*|___)$/gm, '<hr>');
+
+      // Unordered list
+      html = html.replace(/(^[-*+] .+(\n|$))+/gm, (block) => {
+        const items = block.trim().split('\n').map(l => `<li>${l.replace(/^[-*+] /, '')}</li>`).join('');
+        return `<ul>${items}</ul>`;
+      });
+
+      // Ordered list
+      html = html.replace(/(^\d+\. .+(\n|$))+/gm, (block) => {
+        const items = block.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
+        return `<ol>${items}</ol>`;
+      });
+
+      // Links
+      html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+      // Paragraphs (blank-line separated blocks not already wrapped in block tags)
+      html = html.replace(/^(?!<[houpl]|<block|<pre|<hr)(.+)$/gm, (line) => {
+        if (line.trim() === '') return '';
+        return `<p>${line}</p>`;
+      });
+
+      // Collapse consecutive blank lines
+      html = html.replace(/\n{2,}/g, '\n');
+
+      return html;
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // ── DOM helpers ───────────────────────────────────────────────
+    function hideEmpty() {
+      emptyEl.style.display = 'none';
+    }
+
+    function showEmpty() {
+      if (messagesEl.children.length === 1) {
+        emptyEl.style.display = '';
+      }
+    }
+
+    function appendMessage(role, text) {
+      hideEmpty();
+      const row = document.createElement('div');
+      row.className = `msg-row ${role}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `bubble ${role}`;
+
+      if (role === 'function') {
+        bubble.innerHTML = `<span class="fn-icon">⚙</span><span>${escapeHtml(text)}()</span>`;
+      } else if (role === 'model') {
+        bubble.innerHTML = renderMarkdown(text);
+      } else {
+        bubble.textContent = text;
+      }
+
+      row.appendChild(bubble);
+      messagesEl.appendChild(row);
+      scrollToBottom();
+      return bubble;
+    }
+
+    function appendStreamingBubble() {
+      hideEmpty();
+      const row = document.createElement('div');
+      row.className = 'msg-row model';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble model';
+
+      row.appendChild(bubble);
+      messagesEl.appendChild(row);
+      return bubble;
+    }
+
+    function showTyping() {
+      if (document.getElementById('typing')) return;
+      const row = document.createElement('div');
+      row.className = 'msg-row model';
+      row.id = 'typing';
+
+      const tb = document.createElement('div');
+      tb.className = 'typing-bubble';
+      [0, 1, 2].forEach(() => {
+        const d = document.createElement('div');
+        d.className = 'dot';
+        tb.appendChild(d);
+      });
+
+      row.appendChild(tb);
+      messagesEl.appendChild(row);
+      scrollToBottom();
+    }
+
+    function removeTyping() {
+      document.getElementById('typing')?.remove();
+    }
+
+    function scrollToBottom() {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // ── Send message ──────────────────────────────────────────────
+    async function sendMessage() {
+      const prompt = promptEl.value.trim();
+      const sessionId = sessionEl.value.trim();
+      if (!prompt || !sessionId || sendBtn.disabled) return;
+
+      appendMessage('user', prompt);
+      promptEl.value = '';
+      promptEl.style.height = 'auto';
+      sendBtn.disabled = true;
+      showTyping();
+
+      let streamBubble = null;
+      let accumulated = '';
+
+      try {
+        const res = await fetch('/prompt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, prompt }),
+        });
+
+        if (!res.ok) {
+          removeTyping();
+          appendMessage('model', 'Erro: ' + (await res.text()));
+          return;
         }
 
-        if (!sessionEl.value) {
-            sessionEl.value = generateId();
-        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
 
-        function appendMessage(role, content) {
-            const div = document.createElement("div");
-            div.className = "msg " + role;
-            const roleLabel = document.createElement("div");
-            roleLabel.className = "role";
-            roleLabel.textContent = role === "user" ? "You" : role === "model" ? "Model" : "Function";
-            div.appendChild(roleLabel);
-            const body = document.createElement("div");
-            if (role === "model" && content) {
-                body.innerHTML = marked.parse(content);
-            } else {
-                body.textContent = content;
-            }
-            div.appendChild(body);
-            messagesEl.appendChild(div);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-            return body;
-        }
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        function showTyping() {
-            const div = document.createElement("div");
-            div.className = "typing";
-            div.id = "typing";
-            [1, 2, 3].forEach(() => {
-                const dot = document.createElement("div");
-                dot.className = "typing-dot";
-                div.appendChild(dot);
-            });
-            messagesEl.appendChild(div);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
+          buf += decoder.decode(value, { stream: true });
+          const parts = buf.split('\n\n');
+          buf = parts.pop();
 
-        function removeTyping() {
-            const el = document.getElementById("typing");
-            if (el) el.remove();
-        }
+          for (const part of parts) {
+            if (!part.startsWith('data: ')) continue;
+            let ev;
+            try { ev = JSON.parse(part.slice(6)); } catch { continue; }
 
-        async function sendMessage() {
-            const prompt = promptEl.value.trim();
-            const sessionId = sessionEl.value.trim();
-            if (!prompt || !sessionId) return;
-
-            appendMessage("user", prompt);
-            promptEl.value = "";
-            sendBtn.disabled = true;
-            showTyping();
-
-            let msgBody = null;
-            let accumulatedText = "";
-
-            try {
-                const res = await fetch("/prompt", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        session_id: sessionId,
-                        prompt: prompt
-                    })
-                });
-
-                if (!res.ok) {
-                    removeTyping();
-                    const text = await res.text();
-                    appendMessage("model", "Error: " + text);
-                    return;
-                }
-
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = "";
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const parts = buffer.split("\n\n");
-                    buffer = parts.pop();
-
-                    for (const part of parts) {
-                        if (!part.startsWith("data: ")) continue;
-                        const data = JSON.parse(part.slice(6));
-
-                        if (data.type === "function_call") {
-                            msgBody = null;
-                            accumulatedText = "";
-                            
-                            removeTyping();
-                            appendMessage("function", "⚙ " + data.content + "()");
-                            showTyping();
-                        } else if (data.type === "text") {
-                            if (!msgBody) {
-                                removeTyping();
-                                msgBody = appendMessage("model", "");
-                            }
-
-                            accumulatedText += data.content;
-                            msgBody.innerHTML = marked.parse(accumulatedText);
-                            messagesEl.scrollTop = messagesEl.scrollHeight;
-                        } else if (data.type === "error") {
-                            removeTyping();
-                            appendMessage("model", "Error: " + data.content);
-                        } else if (data.type === "done") {
-                            removeTyping();
-                        }
-                    }
-                }
-            } catch (err) {
+            if (ev.type === 'text') {
+              if (!streamBubble) {
                 removeTyping();
-                appendMessage("model", "Error: " + err.message);
-            } finally {
-                sendBtn.disabled = false;
-                promptEl.focus();
+                streamBubble = appendStreamingBubble();
+              }
+              accumulated += ev.content;
+              streamBubble.innerHTML = renderMarkdown(accumulated);
+              scrollToBottom();
+
+            } else if (ev.type === 'function_call') {
+              streamBubble = null;
+              accumulated = '';
+              removeTyping();
+              appendMessage('function', ev.content);
+              showTyping();
+
+            } else if (ev.type === 'turn_done') {
+              streamBubble = null;
+              accumulated = '';
+              removeTyping();
+
+            } else if (ev.type === 'done') {
+              removeTyping();
+
+            } else if (ev.type === 'error') {
+              removeTyping();
+              appendMessage('model', 'Erro: ' + ev.content);
             }
+          }
         }
+      } catch (err) {
+        removeTyping();
+        appendMessage('model', 'Erro: ' + err.message);
+      } finally {
+        sendBtn.disabled = false;
+        promptEl.focus();
+      }
+    }
 
-        function setEvents(events) {
-            if (!events || events.length === 0) return;
-            let texts = [];
-            let currentRole = null;
-            for (const e of events) {
-                if (e.role !== currentRole) {
-                    if (texts.length > 0) {
-                        appendMessage(currentRole, texts.join(""));
-                        texts = [];
-                    }
-                }
+    // ── Session management ────────────────────────────────────────
+    async function loadSession() {
+      const sessionId = sessionEl.value.trim();
+      if (!sessionId) return;
+      saveSessionId();
+      clearMessages();
 
-                currentRole = e.role;
-                for (const part of e.parts) {
-                    if (part.function_call) {
-                        if (texts.length > 0) {
-                            appendMessage(e.role, texts.join(""));
-                            texts = [];
-                        }
-                        appendMessage("function", "⚙ " + part.function_call.name + "()");
-                    } else if (part.text) {
-                        texts.push(part.text);
-                    }
-                }               
-            }  
-            if (texts.length > 0) {
-                appendMessage(currentRole, texts.join(""));
-                texts = [];
-            }         
-        }
+      try {
+        const res = await fetch('/history?session_id=' + encodeURIComponent(sessionId));
+        if (!res.ok) { appendMessage('model', 'Falha ao carregar sessão.'); return; }
 
-        async function loadSession() {
-            const sessionId = sessionEl.value.trim();
-            if (!sessionId) return;
+        const events = await res.json();
+        if (!events || events.length === 0) { showEmpty(); return; }
 
-            messagesEl.innerHTML = "";
-            try {
-                const res = await fetch("/history?session_id=" + encodeURIComponent(sessionId));
-                if (!res.ok) {
-                    appendMessage("model", "Failed to load session.");
-                    return;
-                }
-                const events = await res.json();
-                if (!events || events.length === 0) {
-                    return;
-                }
-                setEvents(events);
-            } catch (err) {
-                appendMessage("model", "Error loading session: " + err.message);
+        for (const ev of events) {
+          const role = ev.role === 'user' ? 'user' : 'model';
+          let texts = [];
+          for (const part of ev.parts) {
+            if (part.function_call) {
+              if (texts.length) { appendMessage(role, texts.join('')); texts = []; }
+              appendMessage('function', part.function_call.name);
+            } else if (part.text) {
+              texts.push(part.text);
             }
+          }
+          if (texts.length) appendMessage(role, texts.join(''));
         }
+      } catch (err) {
+        appendMessage('model', 'Erro ao carregar sessão: ' + err.message);
+      }
+    }
 
-        function newSession() {
-            sessionEl.value = generateId();
-            messagesEl.innerHTML = "";
-            promptEl.focus();
-        }
-    </script>
+    function newSession() {
+      sessionEl.value = generateId();
+      saveSessionId();
+      clearMessages();
+      promptEl.focus();
+    }
+
+    async function clearSession() {
+      const sessionId = sessionEl.value.trim();
+      if (!sessionId) return;
+      try {
+        await fetch('/history?session_id=' + encodeURIComponent(sessionId), { method: 'DELETE' });
+      } catch (_) {}
+      clearMessages();
+    }
+
+    function clearMessages() {
+      messagesEl.innerHTML = '';
+      messagesEl.appendChild(emptyEl);
+      emptyEl.style.display = '';
+    }
+  </script>
 </body>
 </html>
