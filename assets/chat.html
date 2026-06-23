@@ -24,6 +24,28 @@
       --radius: 12px;
     }
 
+    body.light {
+      --bg: #f5f6fa;
+      --surface: #ffffff;
+      --surface2: #eef0f6;
+      --border: #d0d3e0;
+      --accent: #7c6af7;
+      --accent-hover: #6a58e8;
+      --text: #1a1d27;
+      --text-muted: #6b7080;
+      --user-bg: #ede8ff;
+      --user-border: #c4b5f7;
+      --fn-bg: #e8f4ff;
+      --fn-border: #b0d4f0;
+      --fn-text: #2a6090;
+    }
+
+    body.light .bubble.model code { color: #6a3a9a; }
+    body.light .bubble.model pre code { color: #1a4070; }
+    body.light .bubble.model strong { color: #4a3a9a; }
+    body.light .bubble.model em { color: #3a5070; }
+    body.light .btn-danger:hover { background: #ffe0e6; border-color: #c04060; color: #901030; }
+
     body {
       font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
       background: var(--bg);
@@ -328,6 +350,7 @@
       <button class="btn" onclick="newSession()">Nova</button>
       <button class="btn btn-danger" onclick="clearSession()">Limpar</button>
     </div>
+    <button class="btn" id="theme-btn" onclick="toggleTheme()" title="Alternar tema">🌙</button>
   </header>
 
   <div id="messages">
@@ -349,6 +372,18 @@
   </div>
 
   <script>
+    // ── Theme ─────────────────────────────────────────────────────
+    if (localStorage.getItem('agentTheme') === 'light') document.body.classList.add('light');
+
+    function toggleTheme() {
+      document.body.classList.toggle('light');
+      const isLight = document.body.classList.contains('light');
+      localStorage.setItem('agentTheme', isLight ? 'light' : 'dark');
+      document.getElementById('theme-btn').textContent = isLight ? '☀️' : '🌙';
+    }
+
+    document.getElementById('theme-btn').textContent = document.body.classList.contains('light') ? '☀️' : '🌙';
+
     const messagesEl = document.getElementById('messages');
     const promptEl   = document.getElementById('prompt');
     const sendBtn    = document.getElementById('send-btn');
