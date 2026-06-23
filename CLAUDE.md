@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> For guidance targeted at other AI coding agents (OpenAI Codex, GitHub Copilot, etc.), see [AGENTS.md](AGENTS.md).
+
 ## Project Overview
 
 This is a Go-based agentic system that supports multiple LLM providers (Google Gemini and Anthropic Claude) to power a generic AI assistant with function calling and semantic document search capabilities. The agent can reason about user requests and invoke registered tools, maintaining multi-turn conversation sessions via a REST API.

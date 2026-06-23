@@ -63,7 +63,7 @@ Both Gemini and Anthropic implement the same `LLMProvider` interface:
 ```go
 type LLMProvider interface {
     Send(ctx context.Context, req ProviderRequest) ([]model.Content, error)
-    SendStream(ctx context.Context, req ProviderRequest, onText func(string) error, onFunctionCall func(name string, args map[string]any) error) ([]model.Content, error)
+    SendStream(ctx context.Context, req ProviderRequest, onText func(string) error, onFunctionCall func(name string, args map[string]any) error, onTurnDone func() error) ([]model.Content, error)
 }
 ```
 
